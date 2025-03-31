@@ -536,6 +536,7 @@ function extractTranscriptFromPanel(panel) {
   ];
 
   let segments = null;
+  let transcript = "";
 
   // Use a single loop to find segments
   for (const selector of selectors) {
@@ -557,7 +558,11 @@ function extractTranscriptFromPanel(panel) {
   const textArray = Array.from(segments).map((segment) =>
     segment.textContent.trim()
   );
+<<<<<<< HEAD
   const transcript = textArray.join(" ");
+=======
+  transcript = textArray.join(" ");
+>>>>>>> origin/main
 
   console.log(
     `Extracted full transcript with ${segments.length} segments and ${transcript.length} characters`
@@ -576,6 +581,10 @@ async function collectCaptionsOverTime() {
   const MAX_DUPLICATES = 5; // Reducido de 10 a 5 para terminar más rápido
 
   return new Promise((resolve, reject) => {
+<<<<<<< HEAD
+=======
+    // Set timeout to stop collection after 20 seconds (reducido de 30s a 20s)
+>>>>>>> origin/main
     const timeout = setTimeout(() => {
       clearInterval(interval);
 
@@ -587,8 +596,14 @@ async function collectCaptionsOverTime() {
       } else {
         reject(new Error("No captions could be collected"));
       }
+<<<<<<< HEAD
     }, 20000); // Reducido de 30s a 20s
 
+=======
+    }, 20000);
+
+    // Collect captions every 1000ms (reducido de 500ms)
+>>>>>>> origin/main
     const interval = setInterval(() => {
       try {
         const currentTime = Date.now();
@@ -609,6 +624,11 @@ async function collectCaptionsOverTime() {
             duplicateCount++;
           }
 
+<<<<<<< HEAD
+=======
+          // If we see the same caption for 5 checks and have collected some captions,
+          // assume the video is paused or ended
+>>>>>>> origin/main
           if (duplicateCount > MAX_DUPLICATES && captions.length > 5) {
             clearInterval(interval);
             clearTimeout(timeout);
