@@ -706,19 +706,7 @@ async function extractTranscriptAfterOpen() {
 function extractTranscriptFromPanel(panel) {
   console.log("Extracting transcript from panel...");
 
-  // Try to select original language first
-  selectOriginalLanguage(panel)
-    .then(() => {
-      console.log("Language selection attempt completed");
-    })
-    .catch((error) => {
-      console.warn("Error in language selection:", error);
-    });
-
-  // Give a moment for language selection to take effect (if any)
-  setTimeout(() => {}, 500);
-
-  // Try multiple selector options to find transcript segments
+  // Cache DOM queries
   const selectors = [
     "ytd-transcript-segment-renderer",
     "ytd-transcript-body-renderer",
@@ -727,7 +715,9 @@ function extractTranscriptFromPanel(panel) {
   ];
 
   let segments = null;
+  let transcript = "";
 
+  // Use a single loop to find segments
   for (const selector of selectors) {
     const elements = panel.querySelectorAll(selector);
     if (elements && elements.length > 0) {
@@ -743,10 +733,11 @@ function extractTranscriptFromPanel(panel) {
     throw new Error("No transcript segments found in panel");
   }
 
-  let transcript = "";
-  segments.forEach((segment) => {
-    transcript += segment.textContent.trim() + " ";
-  });
+  // Use a more efficient way to concatenate text
+  const textArray = Array.from(segments).map((segment) =>
+    segment.textContent.trim()
+  );
+  transcript = textArray.join(" ");
 
   console.log(
     `Extracted full transcript with ${segments.length} segments and ${transcript.length} characters`
@@ -760,10 +751,13 @@ async function collectCaptionsOverTime() {
   let captions = [];
   let lastCaptionText = "";
   let duplicateCount = 0;
+  let lastCollectionTime = Date.now();
+  const COLLECTION_INTERVAL = 1000; // Aumentado de 500ms a 1000ms
+  const MAX_DUPLICATES = 5; // Reducido de 10 a 5 para terminar más rápido
 
   // Create caption collection interval
   return new Promise((resolve, reject) => {
-    // Set timeout to stop collection after 30 seconds
+    // Set timeout to stop collection after 20 seconds (reducido de 30s a 20s)
     const timeout = setTimeout(() => {
       clearInterval(interval);
 
@@ -775,11 +769,17 @@ async function collectCaptionsOverTime() {
       } else {
         reject(new Error("No captions could be collected"));
       }
-    }, 30000);
+    }, 20000);
 
-    // Collect captions every 500ms
+    // Collect captions every 1000ms (reducido de 500ms)
     const interval = setInterval(() => {
       try {
+        const currentTime = Date.now();
+        if (currentTime - lastCollectionTime < COLLECTION_INTERVAL) {
+          return; // Skip if not enough time has passed
+        }
+        lastCollectionTime = currentTime;
+
         const captionWindow = document.querySelector(".caption-window");
         if (captionWindow) {
           const captionText = captionWindow.textContent.trim();
@@ -792,9 +792,9 @@ async function collectCaptionsOverTime() {
             duplicateCount++;
           }
 
-          // If we see the same caption for 10 checks and have collected some captions,
+          // If we see the same caption for 5 checks and have collected some captions,
           // assume the video is paused or ended
-          if (duplicateCount > 10 && captions.length > 5) {
+          if (duplicateCount > MAX_DUPLICATES && captions.length > 5) {
             clearInterval(interval);
             clearTimeout(timeout);
             console.log(
@@ -806,7 +806,7 @@ async function collectCaptionsOverTime() {
       } catch (error) {
         console.error("Error collecting captions:", error);
       }
-    }, 500);
+    }, COLLECTION_INTERVAL);
   });
 }
 
@@ -1069,29 +1069,48 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
 
     // Create and show results
     const resultsDiv = document.createElement("div");
+
+    // Mejorada la detección del tema oscuro
+    const isDarkTheme =
+      document.documentElement.classList.contains("dark-theme") ||
+      document.documentElement.getAttribute("data-theme") === "dark" ||
+      document.body.classList.contains("dark-theme") ||
+      document.body.style.backgroundColor === "rgb(0, 0, 0)" ||
+      document.body.style.backgroundColor === "#000000" ||
+      window.getComputedStyle(document.body).backgroundColor ===
+        "rgb(0, 0, 0)" ||
+      window.getComputedStyle(document.body).backgroundColor === "#000000";
+
+    console.log("Dark theme detected:", isDarkTheme);
+
+    // Aplicar estilos base
     resultsDiv.style.cssText = `
       position: fixed;
       top: 20px;
       right: 20px;
-      width: 400px;
+      width: 600px;
       max-height: 80vh;
-      background: white;
-      padding: 20px;
+      background: ${isDarkTheme ? "#1a1a1a" : "white"};
+      color: ${isDarkTheme ? "#ffffff" : "#000000"};
+      padding: 25px;
       border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 10px rgba(0,0,0,${isDarkTheme ? "0.3" : "0.1"});
       z-index: 9999;
       overflow-y: auto;
+      font-size: 24px;
+      line-height: 1.8;
     `;
 
+    // Crear el contenido del popup
     resultsDiv.innerHTML = `
-      <h3>${videoTitle}</h3>
-      <h4>Summary${
+      <h3 style="font-size: 28px; margin-bottom: 20px; color: inherit;">${videoTitle}</h3>
+      <h4 style="font-size: 26px; margin-bottom: 20px; color: inherit;">Summary${
         summaryLanguage !== "auto" ? ` (${languageLabel})` : ""
       }:</h4>
-      <p>${summary}</p>
+      <p style="font-size: 24px; margin-bottom: 20px; line-height: 1.8; color: inherit;">${summary}</p>
       ${
         isPartial
-          ? '<p style="color: #ff6600; font-size: 12px;">Nota: Este resumen se basa en una transcripción parcial. Para mejores resultados, intenta usar la opción "Mostrar transcripción" del video.</p>'
+          ? '<p style="color: #ffa366; font-size: 18px;">Nota: Este resumen se basa en una transcripción parcial. Para mejores resultados, intenta usar la opción "Mostrar transcripción" del video.</p>'
           : ""
       }
       <button onclick="this.parentElement.remove()" style="
@@ -1100,12 +1119,52 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
         right: 10px;
         background: none;
         border: none;
-        font-size: 20px;
+        font-size: 28px;
         cursor: pointer;
+        padding: 5px 10px;
+        color: ${isDarkTheme ? "#ffffff" : "#666"};
+        transition: color 0.2s ease;
       ">×</button>
     `;
 
+    // Añadir el popup al documento
     document.body.appendChild(resultsDiv);
+
+    // Aplicar estilos adicionales después de añadir al DOM
+    const style = document.createElement("style");
+    style.textContent = `
+      #youtube-transcript-summary {
+        background: ${isDarkTheme ? "#1a1a1a" : "white"} !important;
+        color: ${isDarkTheme ? "#ffffff" : "#000000"} !important;
+      }
+      #youtube-transcript-summary h3,
+      #youtube-transcript-summary h4,
+      #youtube-transcript-summary p {
+        color: ${isDarkTheme ? "#ffffff" : "#000000"} !important;
+      }
+      #youtube-transcript-summary button {
+        color: ${isDarkTheme ? "#ffffff" : "#666"} !important;
+      }
+      #youtube-transcript-summary button:hover {
+        color: #ffa366 !important;
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Añadir ID al popup
+    resultsDiv.id = "youtube-transcript-summary";
+
+    // Añadir efecto hover al botón de cierre
+    const closeButton = resultsDiv.querySelector("button");
+    if (closeButton) {
+      closeButton.addEventListener("mouseover", () => {
+        closeButton.style.color = "#ffa366";
+      });
+      closeButton.addEventListener("mouseout", () => {
+        closeButton.style.color = isDarkTheme ? "#ffffff" : "#666";
+      });
+    }
+
     console.log("Summary displayed successfully");
 
     // Si era transcripción parcial y la notificación sigue visible, quitarla
@@ -1455,27 +1514,38 @@ function showUserNotice(message) {
 
   const noticeDiv = document.createElement("div");
   noticeDiv.id = "transcript-collector-notice";
-  noticeDiv.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    z-index: 9999;
-    font-size: 14px;
-    max-width: 80%;
-    text-align: center;
-  `;
+
+  // Use CSS classes instead of inline styles for better performance
+  noticeDiv.className = "transcript-notice";
   noticeDiv.textContent = message;
+
+  // Add styles to head instead of inline
+  if (!document.getElementById("transcript-notice-style")) {
+    const style = document.createElement("style");
+    style.id = "transcript-notice-style";
+    style.textContent = `
+      .transcript-notice {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        z-index: 9999;
+        font-size: 14px;
+        max-width: 80%;
+        text-align: center;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   document.body.appendChild(noticeDiv);
 
   // Auto-hide after 15 seconds
-  setTimeout(() => {
-    removeUserNotice();
-  }, 15000);
+  setTimeout(removeUserNotice, 15000);
 }
 
 // Function to remove user notice

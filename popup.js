@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const copyButton = document.getElementById("copyButton");
   const summaryContainer = document.getElementById("summaryContainer");
   const languageSelect = document.getElementById("summaryLanguage");
+  const themeToggle = document.getElementById("themeToggle");
 
   console.log("Elements found:", {
     transcribeBtn: !!transcribeBtn,
@@ -20,6 +21,7 @@ document.addEventListener("DOMContentLoaded", function () {
     extractButton: !!extractButton,
     summaryContainer: !!summaryContainer,
     languageSelect: !!languageSelect,
+    themeToggle: !!themeToggle,
   });
 
   // Load saved API key
@@ -38,6 +40,14 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
   );
+
+  // Load saved theme preference
+  chrome.storage.sync.get(["theme"], function (result) {
+    if (result.theme === "dark") {
+      document.body.classList.add("dark-theme");
+      themeToggle.textContent = "☀️";
+    }
+  });
 
   // Save API key when changed
   if (apiKeyInput) {
@@ -77,11 +87,78 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  // Theme toggle functionality
+  if (themeToggle) {
+    themeToggle.addEventListener("click", function () {
+      document.body.classList.toggle("dark-theme");
+      const isDark = document.body.classList.contains("dark-theme");
+      themeToggle.textContent = isDark ? "☀️" : "🌙";
+
+      // Save theme preference
+      chrome.storage.sync.set({
+        theme: isDark ? "dark" : "light",
+      });
+    });
+  }
+
+  // Función para verificar si hay una API key guardada
+  async function checkApiKey() {
+    const result = await chrome.storage.sync.get(["apiKey"]);
+    if (result.apiKey) {
+      document.getElementById("apiKeyGroup").style.display = "none";
+      document.getElementById("apiKeySaved").style.display = "block";
+    } else {
+      document.getElementById("apiKeyGroup").style.display = "block";
+      document.getElementById("apiKeySaved").style.display = "none";
+    }
+  }
+
+  // Función para guardar la API key
+  async function saveApiKey() {
+    const apiKey = apiKeyInput.value.trim();
+    if (!apiKey) {
+      showStatus("Por favor, ingresa una API key", "error");
+      return;
+    }
+
+    try {
+      await chrome.storage.sync.set({ apiKey });
+      showStatus("API Key guardada correctamente", "success");
+      document.getElementById("apiKeyGroup").style.display = "none";
+      document.getElementById("apiKeySaved").style.display = "block";
+    } catch (error) {
+      showStatus("Error al guardar la API key", "error");
+    }
+  }
+
+  // Función para cambiar la API key
+  function changeApiKey() {
+    document.getElementById("apiKeyGroup").style.display = "block";
+    document.getElementById("apiKeySaved").style.display = "none";
+    apiKeyInput.value = "";
+  }
+
+  // Verificar API key al cargar
+  checkApiKey();
+
+  // Event listeners para la API key
+  if (saveButton) {
+    saveButton.addEventListener("click", saveApiKey);
+  }
+
+  if (document.getElementById("changeApiKey")) {
+    document
+      .getElementById("changeApiKey")
+      .addEventListener("click", changeApiKey);
+  }
+
   if (transcribeBtn) {
     transcribeBtn.addEventListener("click", async function () {
       console.log("=== BOTÓN TRANSCRIBE PRESIONADO ===");
 
-      const apiKey = apiKeyInput ? apiKeyInput.value : "";
+      const result = await chrome.storage.sync.get(["apiKey"]);
+      const apiKey = result.apiKey;
+
       if (!apiKey) {
         console.log("Error: API key no proporcionada");
         showStatus("Please enter your OpenAI API key", "error");
@@ -278,6 +355,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const statusDiv = document.getElementById("status");
     const summaryContainer = document.getElementById("summaryContainer");
     const summaryLanguage = document.getElementById("summaryLanguage").value;
+    const isDark = document.body.classList.contains("dark-theme");
 
     // Determine language label for display
     let languageLabel = "original language";
@@ -885,7 +963,7 @@ document.addEventListener("DOMContentLoaded", function () {
             position: fixed;
             top: 20px;
             right: 20px;
-            width: 400px;
+            width: 500px;
             max-height: 80vh;
             background: white;
             padding: 20px;
@@ -893,20 +971,23 @@ document.addEventListener("DOMContentLoaded", function () {
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             z-index: 9999;
             overflow-y: auto;
+            font-size: 22px;
+            line-height: 1.6;
           `;
 
           resultsDiv.innerHTML = `
-            <h3>${videoTitle}</h3>
-            <h4>Summary:</h4>
-            <p>${summary}</p>
+            <h3 style="font-size: 26px; margin-bottom: 20px;">${videoTitle}</h3>
+            <h4 style="font-size: 24px; margin-bottom: 20px;">Summary:</h4>
+            <p style="font-size: 22px; margin-bottom: 20px; line-height: 1.6;">${summary}</p>
             <button onclick="this.parentElement.remove()" style="
               position: absolute;
               top: 10px;
               right: 10px;
               background: none;
               border: none;
-              font-size: 20px;
+              font-size: 26px;
               cursor: pointer;
+              padding: 5px 10px;
             ">×</button>
           `;
 
