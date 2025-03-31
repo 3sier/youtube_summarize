@@ -67,6 +67,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
   }
 
+  if (request.action === "getApiKey") {
+    // Obtener la API key del almacenamiento
+    chrome.storage.sync.get(["apiKey"], (result) => {
+      console.log(
+        "API Key en background:",
+        result.apiKey ? "Presente" : "No encontrada"
+      );
+      sendResponse({ apiKey: result.apiKey });
+    });
+    return true; // Mantener el canal de mensajes abierto para la respuesta asíncrona
+  }
+
   // Always return true if you want to use sendResponse asynchronously
   return true;
 });

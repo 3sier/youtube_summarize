@@ -1,6 +1,14 @@
 // Log that content script is loaded
 console.log("=== YOUTUBE TRANSCRIPT EXTRACTOR CONTENT SCRIPT LOADED ===");
 
+// Cache DOM queries
+let cachedElements = {
+  transcriptPanel: null,
+  languageSelector: null,
+  menuButton: null,
+  moreActionsButton: null,
+};
+
 // Function to detect if we're on mobile YouTube
 function isMobileYouTube() {
   return window.location.hostname.includes("m.youtube.com");
@@ -12,16 +20,13 @@ function getVideoId() {
   return urlParams.get("v");
 }
 
-// Function to get video title
+// Function to get video title with cached selectors
 function getVideoTitle() {
-  // Try different selectors for title as YouTube's structure might vary
   const selectors = [
-    // Desktop selectors
     "h1.ytd-video-primary-info-renderer",
     "h1.title.style-scope.ytd-video-primary-info-renderer",
     "#container h1",
     ".ytp-title-link",
-    // Mobile selectors
     ".slim-video-information-title",
     ".player-overlays .title",
   ];
@@ -33,7 +38,7 @@ function getVideoTitle() {
     }
   }
 
-  return "YouTube Video"; // Fallback title
+  return "YouTube Video";
 }
 
 // Function to get video transcript - Enhanced version for better detection
@@ -47,7 +52,7 @@ async function getTranscript() {
       return await getMobileTranscript();
     }
 
-    // First try to find the transcript panel directly
+    // Try to find the transcript panel directly
     const transcriptPanelSelectors = [
       "ytd-transcript-search-panel-renderer",
       "ytd-transcript-renderer",
@@ -56,53 +61,23 @@ async function getTranscript() {
       "ytd-transcript-body-renderer",
     ];
 
-    for (const selector of transcriptPanelSelectors) {
-      const panel = document.querySelector(selector);
-      if (panel) {
-        console.log(`Found transcript panel with selector: ${selector}`);
-
-        // Check if there's a language selection dropdown
-        const languageSelectors = [
-          'paper-dropdown-menu[label*="language" i]',
-          'paper-dropdown-menu[aria-label*="language" i]',
-          'yt-dropdown-menu[label*="language" i]',
-          'button[aria-label*="language" i]',
-          '.dropdown-trigger[aria-label*="language" i]',
-        ];
-
-        let languageSelector = null;
-        for (const langSelector of languageSelectors) {
-          const element =
-            panel.querySelector(langSelector) ||
-            document.querySelector(langSelector);
-          if (element) {
-            languageSelector = element;
-            console.log(`Found language selector: ${langSelector}`);
-            break;
-          }
+    // Cache the transcript panel if found
+    if (!cachedElements.transcriptPanel) {
+      for (const selector of transcriptPanelSelectors) {
+        const panel = document.querySelector(selector);
+        if (panel) {
+          cachedElements.transcriptPanel = panel;
+          console.log(`Found transcript panel with selector: ${selector}`);
+          break;
         }
-
-        // If we found a language selector, check if it's already set to the original language
-        // (Usually YouTube selects the original language by default)
-        if (languageSelector) {
-          console.log("Using the original language for transcript");
-
-          // The language is likely already set to the original, but we'll try to verify
-          const selectedText =
-            languageSelector.textContent || languageSelector.innerText;
-          console.log(
-            `Current selected language appears to be: ${selectedText.trim()}`
-          );
-
-          // Most likely the first option is the original language
-          // We'll just proceed with extraction since YouTube usually defaults to original
-        }
-
-        return extractTranscriptFromPanel(panel);
       }
     }
 
-    // Try to find any direct transcript buttons
+    if (cachedElements.transcriptPanel) {
+      return extractTranscriptFromPanel(cachedElements.transcriptPanel);
+    }
+
+    // Try to find transcript button
     const transcriptButtonSelectors = [
       '[aria-label="Open transcript"]',
       'button[aria-label*="transcript" i]',
@@ -122,34 +97,7 @@ async function getTranscript() {
         for (const panelSelector of transcriptPanelSelectors) {
           const panel = document.querySelector(panelSelector);
           if (panel) {
-            // Check for language options
-            const languageSelectors = [
-              'paper-dropdown-menu[label*="language" i]',
-              'paper-dropdown-menu[aria-label*="language" i]',
-              'yt-dropdown-menu[label*="language" i]',
-              'button[aria-label*="language" i]',
-              '.dropdown-trigger[aria-label*="language" i]',
-            ];
-
-            let languageSelector = null;
-            for (const langSelector of languageSelectors) {
-              const element =
-                panel.querySelector(langSelector) ||
-                document.querySelector(langSelector);
-              if (element) {
-                languageSelector = element;
-                console.log(
-                  `Found language selector after clicking transcript button: ${langSelector}`
-                );
-                break;
-              }
-            }
-
-            // If language selector found, use original language (usually already selected)
-            if (languageSelector) {
-              console.log("Using the original language for transcript");
-            }
-
+            cachedElements.transcriptPanel = panel;
             return extractTranscriptFromPanel(panel);
           }
         }
@@ -159,172 +107,45 @@ async function getTranscript() {
     // Method 1: Try to find transcript button in three dots menu
     try {
       console.log("Trying method 1: Three dots menu");
-      // First check if transcript panel is already open
-      const transcriptPanel = document.querySelector(
-        "ytd-transcript-search-panel-renderer"
-      );
-      if (transcriptPanel) {
-        console.log("Transcript panel already open");
-        // Check for language selector
-        const languageSelectors = [
-          'paper-dropdown-menu[label*="language" i]',
-          'paper-dropdown-menu[aria-label*="language" i]',
-          'yt-dropdown-menu[label*="language" i]',
-          'button[aria-label*="language" i]',
-          '.dropdown-trigger[aria-label*="language" i]',
-        ];
 
-        for (const langSelector of languageSelectors) {
-          const element =
-            transcriptPanel.querySelector(langSelector) ||
-            document.querySelector(langSelector);
-          if (element) {
-            console.log(
-              `Found language selector in existing panel: ${langSelector}`
-            );
-            // We'll use the default (original) language
-            break;
-          }
-        }
-
-        return extractTranscriptFromPanel(transcriptPanel);
-      }
-
-      // Click the "..." menu button
-      const menuButton = document.querySelector(
-        'button.ytp-button[aria-label="More actions"]'
-      );
-      if (!menuButton) {
-        console.log("Menu button not found");
-        throw new Error("Menu button not found");
-      }
-
-      console.log("Clicking menu button");
-      menuButton.click();
-
-      // Wait for menu to appear
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-
-      // Try to find the transcript button
-      const menuItems = document.querySelectorAll("tp-yt-paper-item");
-      console.log(`Found ${menuItems.length} menu items`);
-
-      const transcriptButton = Array.from(menuItems).find(
-        (item) =>
-          item &&
-          item.textContent &&
-          item.textContent.includes("Show transcript")
-      );
-
-      if (!transcriptButton) {
-        // Close menu and try alternative method
-        document.body.click();
-        console.log(
-          "Transcript button not found in menu, trying alternative method"
+      // Cache the menu button if not already cached
+      if (!cachedElements.menuButton) {
+        cachedElements.menuButton = document.querySelector(
+          'button.ytp-button[aria-label="More actions"]'
         );
-        throw new Error("Transcript button not found in menu");
       }
 
-      console.log("Clicking transcript button");
-      transcriptButton.click();
-
-      // Wait for transcript to load
-      await new Promise((resolve) => setTimeout(resolve, 2500));
-
-      // Get transcript segments
-      return await extractTranscriptAfterOpen();
-    } catch (error) {
-      console.log("First method failed:", error.message);
-      // Method 2: Try to find transcript in the three dots menu below video
-      try {
-        console.log("Trying method 2: More actions button below video");
-        // Find and click the three dots menu below the video
-        const moreActionsButtons = document.querySelectorAll(
-          'button[aria-label="More actions"]'
-        );
-        console.log(`Found ${moreActionsButtons.length} more actions buttons`);
-
-        let moreActionsButton = null;
-
-        // Try to find the correct button (not the one in the player)
-        for (const btn of moreActionsButtons) {
-          if (!btn.classList.contains("ytp-button")) {
-            moreActionsButton = btn;
-            break;
-          }
-        }
-
-        if (!moreActionsButton) {
-          throw new Error("More actions button not found");
-        }
-
-        console.log("Clicking more actions button");
-        moreActionsButton.click();
+      if (cachedElements.menuButton) {
+        console.log("Clicking menu button");
+        cachedElements.menuButton.click();
         await new Promise((resolve) => setTimeout(resolve, 1500));
 
-        // Find and click Show transcript option
-        const menuItems = document.querySelectorAll(
-          "ytd-menu-service-item-renderer"
-        );
-        console.log(`Found ${menuItems.length} menu service items`);
+        const menuItems = document.querySelectorAll("tp-yt-paper-item");
+        console.log(`Found ${menuItems.length} menu items`);
 
-        const showTranscriptItem = Array.from(menuItems).find(
+        const transcriptButton = Array.from(menuItems).find(
           (item) =>
             item &&
             item.textContent &&
             item.textContent.includes("Show transcript")
         );
 
-        if (!showTranscriptItem) {
-          throw new Error("Show transcript option not found");
-        }
+        if (transcriptButton) {
+          console.log("Clicking transcript button");
+          transcriptButton.click();
+          await new Promise((resolve) => setTimeout(resolve, 2500));
 
-        console.log("Clicking show transcript option");
-        showTranscriptItem.click();
-        await new Promise((resolve) => setTimeout(resolve, 2500));
-
-        // Get transcript
-        return await extractTranscriptAfterOpen();
-      } catch (method2Error) {
-        console.log("Second method failed:", method2Error.message);
-
-        // Method 3: Try to enable captions and collect them
-        try {
-          console.log("Trying method 3: Enable captions and collect them");
-          const captionsButton = document.querySelector(
-            ".ytp-subtitles-button"
-          );
-
-          if (captionsButton) {
-            const isEnabled =
-              captionsButton.getAttribute("aria-pressed") === "true";
-
-            if (!isEnabled) {
-              console.log("Enabling captions");
-              captionsButton.click();
-              await new Promise((resolve) => setTimeout(resolve, 1000));
-            }
-
-            console.log("Captions enabled, collecting over time");
-            return await collectCaptionsOverTime();
-          } else {
-            throw new Error("Captions button not found");
-          }
-        } catch (method3Error) {
-          console.log("Third method failed:", method3Error.message);
-          throw new Error(
-            "All transcript extraction methods failed. This video may not have captions available."
-          );
+          return await extractTranscriptAfterOpen();
         }
       }
+    } catch (error) {
+      console.log("First method failed:", error.message);
     }
+
+    throw new Error("No se pudo encontrar o abrir la transcripción completa");
   } catch (error) {
     console.error("Failed to get transcript:", error);
-    throw new Error(
-      "Failed to get transcript: " +
-        error.message +
-        ". This video may not have captions available."
-    );
+    throw error;
   }
 }
 
@@ -702,23 +523,11 @@ async function extractTranscriptAfterOpen() {
   return transcript.trim();
 }
 
-// Helper function to extract transcript from an already open panel
+// Optimized function to extract transcript from panel
 function extractTranscriptFromPanel(panel) {
   console.log("Extracting transcript from panel...");
 
-  // Try to select original language first
-  selectOriginalLanguage(panel)
-    .then(() => {
-      console.log("Language selection attempt completed");
-    })
-    .catch((error) => {
-      console.warn("Error in language selection:", error);
-    });
-
-  // Give a moment for language selection to take effect (if any)
-  setTimeout(() => {}, 500);
-
-  // Try multiple selector options to find transcript segments
+  // Cache DOM queries
   const selectors = [
     "ytd-transcript-segment-renderer",
     "ytd-transcript-body-renderer",
@@ -728,6 +537,7 @@ function extractTranscriptFromPanel(panel) {
 
   let segments = null;
 
+  // Use a single loop to find segments
   for (const selector of selectors) {
     const elements = panel.querySelectorAll(selector);
     if (elements && elements.length > 0) {
@@ -743,10 +553,11 @@ function extractTranscriptFromPanel(panel) {
     throw new Error("No transcript segments found in panel");
   }
 
-  let transcript = "";
-  segments.forEach((segment) => {
-    transcript += segment.textContent.trim() + " ";
-  });
+  // Use a more efficient way to concatenate text
+  const textArray = Array.from(segments).map((segment) =>
+    segment.textContent.trim()
+  );
+  const transcript = textArray.join(" ");
 
   console.log(
     `Extracted full transcript with ${segments.length} segments and ${transcript.length} characters`
@@ -754,16 +565,17 @@ function extractTranscriptFromPanel(panel) {
   return transcript.trim();
 }
 
-// Helper function to collect captions over time from the video player
+// Optimized function to collect captions over time
 async function collectCaptionsOverTime() {
   console.log("Starting caption collection...");
   let captions = [];
   let lastCaptionText = "";
   let duplicateCount = 0;
+  let lastCollectionTime = Date.now();
+  const COLLECTION_INTERVAL = 1000; // Aumentado de 500ms a 1000ms
+  const MAX_DUPLICATES = 5; // Reducido de 10 a 5 para terminar más rápido
 
-  // Create caption collection interval
   return new Promise((resolve, reject) => {
-    // Set timeout to stop collection after 30 seconds
     const timeout = setTimeout(() => {
       clearInterval(interval);
 
@@ -775,11 +587,16 @@ async function collectCaptionsOverTime() {
       } else {
         reject(new Error("No captions could be collected"));
       }
-    }, 30000);
+    }, 20000); // Reducido de 30s a 20s
 
-    // Collect captions every 500ms
     const interval = setInterval(() => {
       try {
+        const currentTime = Date.now();
+        if (currentTime - lastCollectionTime < COLLECTION_INTERVAL) {
+          return; // Skip if not enough time has passed
+        }
+        lastCollectionTime = currentTime;
+
         const captionWindow = document.querySelector(".caption-window");
         if (captionWindow) {
           const captionText = captionWindow.textContent.trim();
@@ -792,9 +609,7 @@ async function collectCaptionsOverTime() {
             duplicateCount++;
           }
 
-          // If we see the same caption for 10 checks and have collected some captions,
-          // assume the video is paused or ended
-          if (duplicateCount > 10 && captions.length > 5) {
+          if (duplicateCount > MAX_DUPLICATES && captions.length > 5) {
             clearInterval(interval);
             clearTimeout(timeout);
             console.log(
@@ -806,7 +621,7 @@ async function collectCaptionsOverTime() {
       } catch (error) {
         console.error("Error collecting captions:", error);
       }
-    }, 500);
+    }, COLLECTION_INTERVAL);
   });
 }
 
@@ -1069,29 +884,48 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
 
     // Create and show results
     const resultsDiv = document.createElement("div");
+
+    // Mejorada la detección del tema oscuro
+    const isDarkTheme =
+      document.documentElement.classList.contains("dark-theme") ||
+      document.documentElement.getAttribute("data-theme") === "dark" ||
+      document.body.classList.contains("dark-theme") ||
+      document.body.style.backgroundColor === "rgb(0, 0, 0)" ||
+      document.body.style.backgroundColor === "#000000" ||
+      window.getComputedStyle(document.body).backgroundColor ===
+        "rgb(0, 0, 0)" ||
+      window.getComputedStyle(document.body).backgroundColor === "#000000";
+
+    console.log("Dark theme detected:", isDarkTheme);
+
+    // Aplicar estilos base
     resultsDiv.style.cssText = `
       position: fixed;
       top: 20px;
       right: 20px;
-      width: 400px;
+      width: 600px;
       max-height: 80vh;
-      background: white;
-      padding: 20px;
+      background: ${isDarkTheme ? "#1a1a1a" : "white"};
+      color: ${isDarkTheme ? "#ffffff" : "#000000"};
+      padding: 25px;
       border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 10px rgba(0,0,0,${isDarkTheme ? "0.3" : "0.1"});
       z-index: 9999;
       overflow-y: auto;
+      font-size: 24px;
+      line-height: 1.8;
     `;
 
+    // Crear el contenido del popup
     resultsDiv.innerHTML = `
-      <h3>${videoTitle}</h3>
-      <h4>Summary${
+      <h3 style="font-size: 28px; margin-bottom: 20px; color: inherit;">${videoTitle}</h3>
+      <h4 style="font-size: 26px; margin-bottom: 20px; color: inherit;">Summary${
         summaryLanguage !== "auto" ? ` (${languageLabel})` : ""
       }:</h4>
-      <p>${summary}</p>
+      <p style="font-size: 24px; margin-bottom: 20px; line-height: 1.8; color: inherit;">${summary}</p>
       ${
         isPartial
-          ? '<p style="color: #ff6600; font-size: 12px;">Nota: Este resumen se basa en una transcripción parcial. Para mejores resultados, intenta usar la opción "Mostrar transcripción" del video.</p>'
+          ? '<p style="color: #ffa366; font-size: 18px;">Nota: Este resumen se basa en una transcripción parcial. Para mejores resultados, intenta usar la opción "Mostrar transcripción" del video.</p>'
           : ""
       }
       <button onclick="this.parentElement.remove()" style="
@@ -1100,12 +934,52 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
         right: 10px;
         background: none;
         border: none;
-        font-size: 20px;
+        font-size: 28px;
         cursor: pointer;
+        padding: 5px 10px;
+        color: ${isDarkTheme ? "#ffffff" : "#666"};
+        transition: color 0.2s ease;
       ">×</button>
     `;
 
+    // Añadir el popup al documento
     document.body.appendChild(resultsDiv);
+
+    // Aplicar estilos adicionales después de añadir al DOM
+    const style = document.createElement("style");
+    style.textContent = `
+      #youtube-transcript-summary {
+        background: ${isDarkTheme ? "#1a1a1a" : "white"} !important;
+        color: ${isDarkTheme ? "#ffffff" : "#000000"} !important;
+      }
+      #youtube-transcript-summary h3,
+      #youtube-transcript-summary h4,
+      #youtube-transcript-summary p {
+        color: ${isDarkTheme ? "#ffffff" : "#000000"} !important;
+      }
+      #youtube-transcript-summary button {
+        color: ${isDarkTheme ? "#ffffff" : "#666"} !important;
+      }
+      #youtube-transcript-summary button:hover {
+        color: #ffa366 !important;
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Añadir ID al popup
+    resultsDiv.id = "youtube-transcript-summary";
+
+    // Añadir efecto hover al botón de cierre
+    const closeButton = resultsDiv.querySelector("button");
+    if (closeButton) {
+      closeButton.addEventListener("mouseover", () => {
+        closeButton.style.color = "#ffa366";
+      });
+      closeButton.addEventListener("mouseout", () => {
+        closeButton.style.color = isDarkTheme ? "#ffffff" : "#666";
+      });
+    }
+
     console.log("Summary displayed successfully");
 
     // Si era transcripción parcial y la notificación sigue visible, quitarla
@@ -1455,27 +1329,38 @@ function showUserNotice(message) {
 
   const noticeDiv = document.createElement("div");
   noticeDiv.id = "transcript-collector-notice";
-  noticeDiv.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 12px 20px;
-    border-radius: 8px;
-    z-index: 9999;
-    font-size: 14px;
-    max-width: 80%;
-    text-align: center;
-  `;
+
+  // Use CSS classes instead of inline styles for better performance
+  noticeDiv.className = "transcript-notice";
   noticeDiv.textContent = message;
+
+  // Add styles to head instead of inline
+  if (!document.getElementById("transcript-notice-style")) {
+    const style = document.createElement("style");
+    style.id = "transcript-notice-style";
+    style.textContent = `
+      .transcript-notice {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        z-index: 9999;
+        font-size: 14px;
+        max-width: 80%;
+        text-align: center;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   document.body.appendChild(noticeDiv);
 
   // Auto-hide after 15 seconds
-  setTimeout(() => {
-    removeUserNotice();
-  }, 15000);
+  setTimeout(removeUserNotice, 15000);
 }
 
 // Function to remove user notice
