@@ -1,4 +1,6 @@
-// Datos de personajes de ejemplo
+// Character Module - Manages character data and display functionality
+
+// Character data
 const characters = [
   {
     id: 1,
@@ -58,14 +60,40 @@ const characters = [
   },
 ];
 
-// Elementos del DOM
-const characterGrid = document.getElementById("character-grid");
-const modal = document.getElementById("character-modal");
-const modalBody = document.getElementById("modal-body");
-const closeButton = document.getElementById("close-modal");
+// DOM elements for character gallery
+let characterGrid;
+let modal;
+let modalBody;
+let closeButton;
 
-// Función para crear y mostrar las tarjetas de personajes
+// Initialize DOM elements for character display
+function initDOMElements() {
+  characterGrid = document.getElementById("character-grid");
+  modal = document.getElementById("character-modal");
+  modalBody = document.getElementById("modal-body");
+  closeButton = document.getElementById("close-modal");
+
+  // Close modal when close button is clicked
+  if (closeButton) {
+    closeButton.addEventListener("click", () => {
+      modal.style.display = "none";
+    });
+  }
+
+  // Close modal when clicking outside content
+  window.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      modal.style.display = "none";
+    }
+  });
+}
+
+// Create and display character cards
 function displayCharacters() {
+  initDOMElements();
+
+  if (!characterGrid) return;
+
   characterGrid.innerHTML = "";
 
   characters.forEach((character) => {
@@ -74,40 +102,39 @@ function displayCharacters() {
     card.dataset.id = character.id;
 
     card.innerHTML = `
-            <img src="${character.image}" alt="${character.name}" class="character-image">
-            <div class="character-name">${character.name}</div>
-        `;
+      <img src="${character.image}" alt="${character.name}" class="character-image">
+      <div class="character-name">${character.name}</div>
+    `;
 
     card.addEventListener("click", () => showCharacterDetails(character));
     characterGrid.appendChild(card);
   });
 }
 
-// Función para mostrar los detalles del personaje en el modal
+// Show character details in modal
 function showCharacterDetails(character) {
+  if (!modalBody || !modal) return;
+
   modalBody.innerHTML = `
-        <div class="character-info">
-            <img src="${character.image}" alt="${character.name}" class="modal-image">
-            <h2>${character.name}</h2>
-            <p><span class="info-label">Especie:</span> ${character.species}</p>
-            <p><span class="info-label">Género:</span> ${character.gender}</p>
-        </div>
-    `;
+    <div class="character-info">
+      <img src="${character.image}" alt="${character.name}" class="modal-image">
+      <h2>${character.name}</h2>
+      <p><span class="info-label">Especie:</span> ${character.species}</p>
+      <p><span class="info-label">Género:</span> ${character.gender}</p>
+    </div>
+  `;
 
   modal.style.display = "flex";
 }
 
-// Cerrar el modal
-closeButton.addEventListener("click", () => {
-  modal.style.display = "none";
-});
+// Get all characters
+function getAllCharacters() {
+  return characters;
+}
 
-// Cerrar el modal al hacer clic fuera del contenido
-window.addEventListener("click", (event) => {
-  if (event.target === modal) {
-    modal.style.display = "none";
-  }
-});
-
-// Cargar los personajes cuando se cargue la página
-document.addEventListener("DOMContentLoaded", displayCharacters);
+// Export module functions
+export default {
+  displayCharacters,
+  showCharacterDetails,
+  getAllCharacters,
+};

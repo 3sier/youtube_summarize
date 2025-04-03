@@ -1,7 +1,5 @@
-// Log that content script is loaded
 console.log("=== YOUTUBE TRANSCRIPT EXTRACTOR CONTENT SCRIPT LOADED ===");
 
-// Cache DOM queries
 let cachedElements = {
   transcriptPanel: null,
   languageSelector: null,
@@ -9,18 +7,15 @@ let cachedElements = {
   moreActionsButton: null,
 };
 
-// Function to detect if we're on mobile YouTube
 function isMobileYouTube() {
   return window.location.hostname.includes("m.youtube.com");
 }
 
-// Function to extract video ID from URL
 function getVideoId() {
   const urlParams = new URLSearchParams(window.location.search);
   return urlParams.get("v");
 }
 
-// Function to get video title with cached selectors
 function getVideoTitle() {
   const selectors = [
     "h1.ytd-video-primary-info-renderer",
@@ -41,7 +36,6 @@ function getVideoTitle() {
   return "YouTube Video";
 }
 
-// Function to get video transcript - Enhanced version for better detection
 async function getTranscript() {
   try {
     console.log("Attempting to get transcript with improved detection...");
@@ -149,7 +143,6 @@ async function getTranscript() {
   }
 }
 
-// Function to get transcript from mobile YouTube interface
 async function getMobileTranscript() {
   console.log("Attempting to extract transcript from mobile interface");
 
@@ -274,7 +267,6 @@ async function getMobileTranscript() {
   }
 }
 
-// Helper function to select original language on mobile
 async function selectMobileOriginalLanguage() {
   try {
     console.log("Attempting to select original language on mobile");
@@ -421,7 +413,6 @@ async function selectMobileOriginalLanguage() {
   }
 }
 
-// Helper function to collect captions over time on mobile
 async function collectMobileCaptionsOverTime() {
   console.log("Starting mobile caption collection...");
   let captions = [];
@@ -492,7 +483,6 @@ async function collectMobileCaptionsOverTime() {
   });
 }
 
-// Helper function to extract transcript after the panel is opened
 async function extractTranscriptAfterOpen() {
   // Try multiple selectors for transcript segments
   const selectors = [
@@ -523,7 +513,6 @@ async function extractTranscriptAfterOpen() {
   return transcript.trim();
 }
 
-// Optimized function to extract transcript from panel
 function extractTranscriptFromPanel(panel) {
   console.log("Extracting transcript from panel...");
 
@@ -558,11 +547,7 @@ function extractTranscriptFromPanel(panel) {
   const textArray = Array.from(segments).map((segment) =>
     segment.textContent.trim()
   );
-<<<<<<< HEAD
-  const transcript = textArray.join(" ");
-=======
   transcript = textArray.join(" ");
->>>>>>> origin/main
 
   console.log(
     `Extracted full transcript with ${segments.length} segments and ${transcript.length} characters`
@@ -570,21 +555,16 @@ function extractTranscriptFromPanel(panel) {
   return transcript.trim();
 }
 
-// Optimized function to collect captions over time
 async function collectCaptionsOverTime() {
   console.log("Starting caption collection...");
   let captions = [];
   let lastCaptionText = "";
   let duplicateCount = 0;
   let lastCollectionTime = Date.now();
-  const COLLECTION_INTERVAL = 1000; // Aumentado de 500ms a 1000ms
-  const MAX_DUPLICATES = 5; // Reducido de 10 a 5 para terminar más rápido
+  const COLLECTION_INTERVAL = 1000;
+  const MAX_DUPLICATES = 5;
 
   return new Promise((resolve, reject) => {
-<<<<<<< HEAD
-=======
-    // Set timeout to stop collection after 20 seconds (reducido de 30s a 20s)
->>>>>>> origin/main
     const timeout = setTimeout(() => {
       clearInterval(interval);
 
@@ -596,19 +576,13 @@ async function collectCaptionsOverTime() {
       } else {
         reject(new Error("No captions could be collected"));
       }
-<<<<<<< HEAD
-    }, 20000); // Reducido de 30s a 20s
-
-=======
     }, 20000);
 
-    // Collect captions every 1000ms (reducido de 500ms)
->>>>>>> origin/main
     const interval = setInterval(() => {
       try {
         const currentTime = Date.now();
         if (currentTime - lastCollectionTime < COLLECTION_INTERVAL) {
-          return; // Skip if not enough time has passed
+          return;
         }
         lastCollectionTime = currentTime;
 
@@ -624,11 +598,6 @@ async function collectCaptionsOverTime() {
             duplicateCount++;
           }
 
-<<<<<<< HEAD
-=======
-          // If we see the same caption for 5 checks and have collected some captions,
-          // assume the video is paused or ended
->>>>>>> origin/main
           if (duplicateCount > MAX_DUPLICATES && captions.length > 5) {
             clearInterval(interval);
             clearTimeout(timeout);
@@ -645,7 +614,6 @@ async function collectCaptionsOverTime() {
   });
 }
 
-// Function to summarize transcript using ChatGPT
 async function summarizeTranscript(
   transcript,
   apiKey,
@@ -664,16 +632,13 @@ async function summarizeTranscript(
     );
     console.log("Summary language:", summaryLanguage);
 
-    // Define the system message based on the selected language
     let systemMessage =
       "You are a helpful assistant that creates concise summaries of video transcripts.";
     let userMessage = `Please provide a concise summary of this video transcript:\n\n${transcript}`;
 
-    // If a specific language is selected (not auto)
     if (summaryLanguage && summaryLanguage !== "auto") {
       let languageName = "";
 
-      // Map language codes to full names
       switch (summaryLanguage) {
         case "en":
           languageName = "English";
@@ -714,14 +679,10 @@ async function summarizeTranscript(
       console.log(`Setting summary language to ${languageName}`);
     }
 
-    // Registrar el cuerpo de la petición
     const requestBody = {
       model: "gpt-3.5-turbo",
       messages: [
-        {
-          role: "system",
-          content: systemMessage,
-        },
+        { role: "system", content: systemMessage },
         {
           role: "user",
           content: `${userMessage.substring(0, 100)}... (${
@@ -747,14 +708,8 @@ async function summarizeTranscript(
       body: JSON.stringify({
         model: "gpt-3.5-turbo",
         messages: [
-          {
-            role: "system",
-            content: systemMessage,
-          },
-          {
-            role: "user",
-            content: userMessage,
-          },
+          { role: "system", content: systemMessage },
+          { role: "user", content: userMessage },
         ],
         max_tokens: 500,
       }),
@@ -829,12 +784,10 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
     const videoTitle = getVideoTitle();
     console.log("Getting transcript...");
 
-    // Intentar obtener la transcripción completa
     let transcript;
     let isPartial = false;
 
     try {
-      // Método preferido: Obtener toda la transcripción
       transcript = await getFullTranscript();
       console.log("Full transcript obtained successfully!");
     } catch (fullTranscriptError) {
@@ -844,12 +797,10 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
       );
       console.log("Falling back to collecting captions over time...");
 
-      // Mostrar advertencia al usuario que necesita dejar el video reproducirse
       showUserNotice(
         "Recopilando subtítulos en tiempo real. Por favor, deja que el video se reproduzca para obtener más subtítulos."
       );
 
-      // Fallback: Recolectar subtítulos con el tiempo
       transcript = await getTranscript();
       isPartial = true;
     }
@@ -863,7 +814,6 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
       summaryLanguage
     );
 
-    // Determine language label for display
     let languageLabel = "original language";
     if (summaryLanguage && summaryLanguage !== "auto") {
       switch (summaryLanguage) {
@@ -902,10 +852,8 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
       }
     }
 
-    // Create and show results
     const resultsDiv = document.createElement("div");
 
-    // Mejorada la detección del tema oscuro
     const isDarkTheme =
       document.documentElement.classList.contains("dark-theme") ||
       document.documentElement.getAttribute("data-theme") === "dark" ||
@@ -918,7 +866,6 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
 
     console.log("Dark theme detected:", isDarkTheme);
 
-    // Aplicar estilos base
     resultsDiv.style.cssText = `
       position: fixed;
       top: 20px;
@@ -936,7 +883,6 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
       line-height: 1.8;
     `;
 
-    // Crear el contenido del popup
     resultsDiv.innerHTML = `
       <h3 style="font-size: 28px; margin-bottom: 20px; color: inherit;">${videoTitle}</h3>
       <h4 style="font-size: 26px; margin-bottom: 20px; color: inherit;">Summary${
@@ -962,10 +908,8 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
       ">×</button>
     `;
 
-    // Añadir el popup al documento
     document.body.appendChild(resultsDiv);
 
-    // Aplicar estilos adicionales después de añadir al DOM
     const style = document.createElement("style");
     style.textContent = `
       #youtube-transcript-summary {
@@ -986,10 +930,8 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
     `;
     document.head.appendChild(style);
 
-    // Añadir ID al popup
     resultsDiv.id = "youtube-transcript-summary";
 
-    // Añadir efecto hover al botón de cierre
     const closeButton = resultsDiv.querySelector("button");
     if (closeButton) {
       closeButton.addEventListener("mouseover", () => {
@@ -1002,7 +944,6 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
 
     console.log("Summary displayed successfully");
 
-    // Si era transcripción parcial y la notificación sigue visible, quitarla
     if (isPartial) {
       removeUserNotice();
     }
@@ -1010,7 +951,6 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
     return { success: true, summary: summary };
   } catch (error) {
     console.error("Error in handleTranscription:", error);
-    // Si hay alguna notificación visible, quitarla
     removeUserNotice();
     return { success: false, error: error.message };
   }

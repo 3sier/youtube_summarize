@@ -3,36 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Galería de Personajes</title>
+    <title>Galería de Personajes y Extractor de YouTube</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="container">
+    <!-- Contenedor principal para la galería de personajes -->
+    <div class="main-container">
       <h1>Galería de Personajes</h1>
-      <div class="search-container">
-        <input
-          type="text"
-          id="search-input"
-          placeholder="Buscar personajes..."
-          class="search-input"
-        />
-      </div>
-      <div class="gallery" id="gallery">
-        <!-- Character cards will be generated dynamically -->
-      </div>
-    </div>
 
-    <!-- Character Details Modal -->
-    <div id="characterModal" class="modal">
-      <div class="modal-content">
-        <span id="closeModal" class="close">&times;</span>
-        <div id="characterDetails">
-          <!-- Character details will be inserted here -->
+      <!-- Grilla de personajes -->
+      <div id="character-grid" class="character-grid"></div>
+
+      <!-- Modal para detalles de personajes -->
+      <div id="character-modal" class="modal">
+        <div class="modal-content">
+          <span id="close-modal" class="close-button">&times;</span>
+          <div id="modal-body"></div>
         </div>
       </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="characters.js"></script>
+    <!-- Carga los scripts con tipo module para habilitar imports/exports -->
+    <script type="module" src="js/app.js"></script>
   </body>
 </html>
