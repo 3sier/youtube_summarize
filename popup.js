@@ -1,69 +1,111 @@
 document.addEventListener("DOMContentLoaded", function () {
-  console.log("=== POPUP INICIALIZADO ===");
+  console.log("=== POPUP INITIALIZED ===");
 
-  const transcribeBtn = document.getElementById("transcribeBtn");
-  const apiKeyInput = document.getElementById("apiKey");
-  const statusDiv = document.getElementById("status");
-  const checkPageButton = document.getElementById("checkPage");
-  const saveButton = document.getElementById("saveApiKey");
-  const extractButton = document.getElementById("extractButton");
-  const copyButton = document.getElementById("copyButton");
-  const summaryContainer = document.getElementById("summaryContainer");
-  const languageSelect = document.getElementById("summaryLanguage");
-  const themeToggle = document.getElementById("themeToggle");
+  const debounce = (func, delay) => {
+    let debounceTimer;
+    return function () {
+      const context = this;
+      const args = arguments;
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => func.apply(context, args), delay);
+    };
+  };
 
-  console.log("Elements found:", {
-    transcribeBtn: !!transcribeBtn,
-    apiKeyInput: !!apiKeyInput,
-    statusDiv: !!statusDiv,
-    checkPageButton: !!checkPageButton,
-    saveButton: !!saveButton,
-    extractButton: !!extractButton,
-    summaryContainer: !!summaryContainer,
-    languageSelect: !!languageSelect,
-    themeToggle: !!themeToggle,
-  });
+  const throttle = (func, limit) => {
+    let lastFunc;
+    let lastRan;
+    return function () {
+      const context = this;
+      const args = arguments;
+      if (!lastRan) {
+        func.apply(context, args);
+        lastRan = Date.now();
+      } else {
+        clearTimeout(lastFunc);
+        lastFunc = setTimeout(function () {
+          if (Date.now() - lastRan >= limit) {
+            func.apply(context, args);
+            lastRan = Date.now();
+          }
+        }, limit - (Date.now() - lastRan));
+      }
+    };
+  };
 
-  // Load saved API key
+  const elements = {
+    transcribeBtn: document.getElementById("transcribeBtn"),
+    apiKeyInput: document.getElementById("apiKey"),
+    statusDiv: document.getElementById("status"),
+    checkPageButton: document.getElementById("checkPage"),
+    saveButton: document.getElementById("saveApiKey"),
+    extractButton: document.getElementById("extractButton"),
+    copyButton: document.getElementById("copyButton"),
+    summaryContainer: document.getElementById("summaryContainer"),
+    languageSelect: document.getElementById("summaryLanguage"),
+    themeToggle: document.getElementById("themeToggle"),
+    apiKeyGroup: document.getElementById("apiKeyGroup"),
+    apiKeySaved: document.getElementById("apiKeySaved"),
+    changeApiKey: document.getElementById("changeApiKey"),
+  };
+
+  console.log(
+    "Elements found:",
+    Object.fromEntries(
+      Object.entries(elements).map(([key, val]) => [key, !!val])
+    )
+  );
+
   chrome.storage.sync.get(
-    ["openaiApiKey", "summaryLanguage"],
+    ["openaiApiKey", "summaryLanguage", "theme"],
     function (result) {
       if (result.openaiApiKey) {
-        console.log("API key encontrada en almacenamiento");
-        if (apiKeyInput) apiKeyInput.value = result.openaiApiKey;
+        console.log("API key found in storage");
+        if (elements.apiKeyInput)
+          elements.apiKeyInput.value = result.openaiApiKey;
       } else {
-        console.log("No se encontró API key en almacenamiento");
+        console.log("No API key found in storage");
       }
 
-      if (result.summaryLanguage && languageSelect) {
-        languageSelect.value = result.summaryLanguage;
+      if (result.summaryLanguage && elements.languageSelect) {
+        elements.languageSelect.value = result.summaryLanguage;
       }
+
+      if (result.theme === "dark") {
+        document.body.classList.add("dark-theme");
+        if (elements.themeToggle) elements.themeToggle.textContent = "☀️";
+      }
+
+      updateApiKeyVisibility(!!result.apiKey);
     }
   );
 
-  // Load saved theme preference
-  chrome.storage.sync.get(["theme"], function (result) {
-    if (result.theme === "dark") {
-      document.body.classList.add("dark-theme");
-      themeToggle.textContent = "☀️";
+  function updateApiKeyVisibility(hasKey) {
+    if (elements.apiKeyGroup && elements.apiKeySaved) {
+      elements.apiKeyGroup.style.display = hasKey ? "none" : "block";
+      elements.apiKeySaved.style.display = hasKey ? "block" : "none";
     }
-  });
-
-  // Save API key when changed
-  if (apiKeyInput) {
-    apiKeyInput.addEventListener("change", function () {
-      console.log("Guardando nueva API key en almacenamiento");
-      chrome.storage.sync.set({
-        openaiApiKey: apiKeyInput.value,
-      });
-    });
   }
 
-  // Save API key and language preference
-  if (saveButton) {
-    saveButton.addEventListener("click", function () {
-      const apiKey = apiKeyInput ? apiKeyInput.value.trim() : "";
-      const language = languageSelect ? languageSelect.value : "auto";
+  if (elements.apiKeyInput) {
+    elements.apiKeyInput.addEventListener(
+      "input",
+      debounce(function () {
+        console.log("Saving new API key to storage");
+        chrome.storage.sync.set({
+          openaiApiKey: elements.apiKeyInput.value,
+        });
+      }, 500)
+    );
+  }
+
+  if (elements.saveButton) {
+    elements.saveButton.addEventListener("click", function () {
+      const apiKey = elements.apiKeyInput
+        ? elements.apiKeyInput.value.trim()
+        : "";
+      const language = elements.languageSelect
+        ? elements.languageSelect.value
+        : "auto";
 
       chrome.storage.sync.set(
         {
@@ -78,337 +120,299 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // When language is changed, save the preference
-  if (languageSelect) {
-    languageSelect.addEventListener("change", function () {
+  if (elements.languageSelect) {
+    elements.languageSelect.addEventListener("change", function () {
       chrome.storage.sync.set({
-        summaryLanguage: languageSelect.value,
+        summaryLanguage: elements.languageSelect.value,
       });
     });
   }
 
-  // Theme toggle functionality
-  if (themeToggle) {
-    themeToggle.addEventListener("click", function () {
+  if (elements.themeToggle) {
+    elements.themeToggle.addEventListener("click", function () {
       document.body.classList.toggle("dark-theme");
       const isDark = document.body.classList.contains("dark-theme");
-      themeToggle.textContent = isDark ? "☀️" : "🌙";
+      elements.themeToggle.textContent = isDark ? "☀️" : "🌙";
 
-      // Save theme preference
       chrome.storage.sync.set({
         theme: isDark ? "dark" : "light",
       });
     });
   }
 
-  // Función para verificar si hay una API key guardada
-  async function checkApiKey() {
-    const result = await chrome.storage.sync.get(["apiKey"]);
-    if (result.apiKey) {
-      document.getElementById("apiKeyGroup").style.display = "none";
-      document.getElementById("apiKeySaved").style.display = "block";
-    } else {
-      document.getElementById("apiKeyGroup").style.display = "block";
-      document.getElementById("apiKeySaved").style.display = "none";
-    }
-  }
-
-  // Función para guardar la API key
   async function saveApiKey() {
-    const apiKey = apiKeyInput.value.trim();
+    const apiKey = elements.apiKeyInput.value.trim();
     if (!apiKey) {
-      showStatus("Por favor, ingresa una API key", "error");
+      showStatus("Please enter an API key", "error");
       return;
     }
 
     try {
       await chrome.storage.sync.set({ apiKey });
-      showStatus("API Key guardada correctamente", "success");
-      document.getElementById("apiKeyGroup").style.display = "none";
-      document.getElementById("apiKeySaved").style.display = "block";
+      showStatus("API Key saved successfully", "success");
+      updateApiKeyVisibility(true);
     } catch (error) {
-      showStatus("Error al guardar la API key", "error");
+      showStatus("Error saving API key", "error");
     }
   }
 
-  // Función para cambiar la API key
   function changeApiKey() {
-    document.getElementById("apiKeyGroup").style.display = "block";
-    document.getElementById("apiKeySaved").style.display = "none";
-    apiKeyInput.value = "";
+    updateApiKeyVisibility(false);
+    if (elements.apiKeyInput) elements.apiKeyInput.value = "";
+    if (elements.apiKeyInput) elements.apiKeyInput.focus();
   }
 
-  // Verificar API key al cargar
-  checkApiKey();
-
-  // Event listeners para la API key
-  if (saveButton) {
-    saveButton.addEventListener("click", saveApiKey);
+  if (elements.saveButton) {
+    elements.saveButton.addEventListener("click", saveApiKey);
   }
 
-  if (document.getElementById("changeApiKey")) {
-    document
-      .getElementById("changeApiKey")
-      .addEventListener("click", changeApiKey);
+  if (elements.changeApiKey) {
+    elements.changeApiKey.addEventListener("click", changeApiKey);
   }
 
-  if (transcribeBtn) {
-    transcribeBtn.addEventListener("click", async function () {
-      console.log("=== BOTÓN TRANSCRIBE PRESIONADO ===");
+  if (elements.transcribeBtn) {
+    elements.transcribeBtn.addEventListener(
+      "click",
+      throttle(async function () {
+        console.log("=== TRANSCRIBE BUTTON PRESSED ===");
 
-      const result = await chrome.storage.sync.get(["apiKey"]);
-      const apiKey = result.apiKey;
+        const result = await chrome.storage.sync.get(["apiKey"]);
+        const apiKey = result.apiKey;
 
-      if (!apiKey) {
-        console.log("Error: API key no proporcionada");
-        showStatus("Please enter your OpenAI API key", "error");
-        return;
-      }
-
-      console.log("API key disponible (longitud):", apiKey.length);
-      transcribeBtn.disabled = true;
-      showStatus("Processing video...", "success");
-
-      try {
-        // Get the current tab
-        console.log("Obteniendo tab actual...");
-        const tabs = await chrome.tabs.query({
-          active: true,
-          currentWindow: true,
-        });
-
-        if (!tabs || tabs.length === 0) {
-          console.error("No se encontró tab activa");
-          throw new Error("No active tab found");
+        if (!apiKey) {
+          console.log("Error: API key not provided");
+          showStatus("Please enter your OpenAI API key", "error");
+          return;
         }
 
-        const tab = tabs[0];
-        console.log("Tab URL:", tab.url);
+        console.log("API key available (length):", apiKey.length);
+        elements.transcribeBtn.disabled = true;
+        showStatus("Processing video...", "success");
 
-        if (
-          !tab.url ||
-          (!tab.url.includes("youtube.com/watch") &&
-            !tab.url.includes("m.youtube.com/watch"))
-        ) {
-          console.error("La URL no es de un video de YouTube");
-          throw new Error("Not a YouTube video page");
-        }
-
-        // First make sure the content script is injected
         try {
-          console.log("Inyectando content script...");
-          await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: ["content.js"],
+          console.log("Getting current tab...");
+          const tabs = await chrome.tabs.query({
+            active: true,
+            currentWindow: true,
           });
-          console.log("Content script inyectado correctamente");
-        } catch (injectError) {
-          console.warn(
-            "Error al inyectar script, puede que ya esté inyectado:",
-            injectError
-          );
-          // Continue anyway, as the script might already be there
-        }
 
-        // Add a timeout for the message
-        const sendMessageWithTimeout = (tabId, message, timeout = 60000) => {
-          console.log(
-            "Enviando mensaje al content script con timeout:",
-            timeout,
-            "ms"
-          );
-          return new Promise((resolve, reject) => {
-            const timer = setTimeout(() => {
-              console.error("Timeout al enviar mensaje al content script");
-              reject(new Error("Timeout sending message to content script"));
-            }, timeout);
+          if (!tabs || tabs.length === 0) {
+            console.error("No active tab found");
+            throw new Error("No active tab found");
+          }
 
-            chrome.tabs.sendMessage(tabId, message, (response) => {
-              clearTimeout(timer);
-              if (chrome.runtime.lastError) {
-                console.error(
-                  "Error en runtime al enviar mensaje:",
-                  chrome.runtime.lastError
-                );
-                reject(new Error(chrome.runtime.lastError.message));
-              } else {
-                console.log("Respuesta recibida del content script:", response);
-                resolve(response);
-              }
+          const tab = tabs[0];
+          console.log("Tab URL:", tab.url);
+
+          if (
+            !tab.url ||
+            (!tab.url.includes("youtube.com/watch") &&
+              !tab.url.includes("m.youtube.com/watch"))
+          ) {
+            console.error("URL is not a YouTube video");
+            throw new Error("Not a YouTube video page");
+          }
+
+          try {
+            console.log("Injecting content script...");
+            await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              files: ["content.js"],
             });
-          });
-        };
+            console.log("Content script injected successfully");
+          } catch (injectError) {
+            console.warn(
+              "Error injecting script, it may already be injected:",
+              injectError
+            );
+          }
 
-        // Send message to content script with a 60-second timeout
-        console.log("Enviando mensaje 'transcribe' al content script...");
-        const response = await sendMessageWithTimeout(
-          tab.id,
-          {
-            action: "transcribe",
-            apiKey: apiKey,
-          },
-          60000
-        );
+          const sendMessageWithTimeout = (tabId, message, timeout = 60000) => {
+            console.log(
+              "Sending message to content script with timeout:",
+              timeout,
+              "ms"
+            );
+            return new Promise((resolve, reject) => {
+              const timer = setTimeout(() => {
+                console.error("Timeout sending message to content script");
+                reject(new Error("Timeout sending message to content script"));
+              }, timeout);
 
-        if (response && response.success) {
-          console.log("Transcripción y resumen exitosos");
-          showTranscriptSuccess(response);
-        } else {
-          console.error("La respuesta indica error:", response?.error);
-          showStatus(response?.error || "Failed to process video", "error");
-        }
-      } catch (error) {
-        console.error("Error en proceso completo:", error);
+              chrome.tabs.sendMessage(tabId, message, (response) => {
+                clearTimeout(timer);
+                if (chrome.runtime.lastError) {
+                  console.error(
+                    "Runtime error sending message:",
+                    chrome.runtime.lastError
+                  );
+                  reject(new Error(chrome.runtime.lastError.message));
+                } else {
+                  console.log(
+                    "Response received from content script:",
+                    response
+                  );
+                  resolve(response);
+                }
+              });
+            });
+          };
 
-        // Show more helpful error message based on error type
-        if (error.message.includes("Timeout")) {
-          console.error("Error de timeout");
-          showStatus(
-            "Timed out while processing. The video might be too long or doesn't have captions.",
-            "error"
+          console.log("Sending message 'transcribe' to content script...");
+          const response = await sendMessageWithTimeout(
+            tab.id,
+            {
+              action: "transcribe",
+              apiKey: apiKey,
+            },
+            60000
           );
-        } else if (error.message.includes("Cannot access contents of url")) {
-          console.error("Error de permisos");
-          showStatus(
-            "Extension doesn't have permission for this page. Try refreshing and trying again.",
-            "error"
-          );
-        } else {
-          console.error("Error genérico:", error.message);
-          showStatus("Error: " + error.message, "error");
+
+          if (response && response.success) {
+            console.log("Transcription and summary successful");
+            showTranscriptSuccess(response);
+          } else {
+            console.error("Response indicates error:", response?.error);
+            showStatus(response?.error || "Failed to process video", "error");
+          }
+        } catch (error) {
+          console.error("Error in complete process:", error);
+
+          if (error.message.includes("Timeout")) {
+            console.error("Timeout error");
+            showStatus(
+              "Timed out while processing. The video might be too long or doesn't have captions.",
+              "error"
+            );
+          } else if (error.message.includes("Cannot access contents of url")) {
+            console.error("Permission error");
+            showStatus(
+              "Extension doesn't have permission for this page. Try refreshing and trying again.",
+              "error"
+            );
+          } else {
+            console.error("Generic error:", error.message);
+            showStatus("Error: " + error.message, "error");
+          }
+        } finally {
+          console.log("=== END OF TRANSCRIPTION PROCESS ===");
+          elements.transcribeBtn.disabled = false;
         }
-      } finally {
-        console.log("=== FIN DEL PROCESO DE TRANSCRIPCIÓN ===");
-        transcribeBtn.disabled = false;
-      }
-    });
+      }, 1000)
+    );
   }
 
-  // Check if the current page is a YouTube video page
-  if (checkPageButton) {
-    checkPageButton.addEventListener("click", function () {
-      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        const currentTab = tabs[0];
+  if (elements.checkPageButton) {
+    elements.checkPageButton.addEventListener(
+      "click",
+      throttle(function () {
+        chrome.tabs.query(
+          { active: true, currentWindow: true },
+          function (tabs) {
+            const currentTab = tabs[0];
 
-        // Check if the current URL is a YouTube video
-        if (currentTab.url.includes("youtube.com/watch")) {
-          showStatus(
-            "You are on a YouTube video page. Click the transcript button on the video to capture the transcript.",
-            "success"
-          );
-
-          // Send a message to the content script to check if the transcript button is present
-          chrome.tabs.sendMessage(
-            currentTab.id,
-            { action: "checkTranscript" },
-            function (response) {
-              if (chrome.runtime.lastError) {
-                // Content script might not be injected yet
-                injectContentScript(currentTab.id);
-                return;
-              }
-
-              if (response && response.transcriptAvailable) {
-                showStatus(
-                  "Transcript button found! Click it to capture the transcript.",
-                  "success"
-                );
-              } else {
-                showStatus(
-                  "Transcript button not found. This video might not have a transcript available.",
-                  "error"
-                );
-              }
+            if (!currentTab.url) {
+              showStatus("Could not determine the page URL", "error");
+              return;
             }
-          );
-        } else {
-          showStatus(
-            "You are not on a YouTube video page. Please navigate to a YouTube video and try again.",
-            "error"
-          );
-        }
-      });
-    });
+
+            if (currentTab.url.includes("youtube.com/watch")) {
+              showStatus(
+                "You are on a YouTube video page. Click the transcript button on the video to capture the transcript.",
+                "success"
+              );
+
+              chrome.tabs.sendMessage(
+                currentTab.id,
+                { action: "checkTranscript" },
+                function (response) {
+                  if (chrome.runtime.lastError) {
+                    injectContentScript(currentTab.id);
+                    return;
+                  }
+
+                  if (response && response.transcriptAvailable) {
+                    showStatus(
+                      "Transcript button found! Click it to capture the transcript.",
+                      "success"
+                    );
+                  } else {
+                    showStatus(
+                      "Transcript button not found. This video might not have a transcript available.",
+                      "error"
+                    );
+                  }
+                }
+              );
+            } else {
+              showStatus(
+                "You are not on a YouTube video page. Please navigate to a YouTube video and try again.",
+                "error"
+              );
+            }
+          }
+        );
+      }, 1000)
+    );
   }
 
-  // Function to show status messages
   function showStatus(message, type) {
-    console.log(`Mostrando estado (${type}):`, message);
-    if (statusDiv) {
-      statusDiv.textContent = message;
-      statusDiv.className =
+    console.log(`Showing status (${type}):`, message);
+    if (elements.statusDiv) {
+      elements.statusDiv.textContent = message;
+      elements.statusDiv.className =
         type === "success" ? "status success" : "status error";
-      statusDiv.style.display = "block";
+      elements.statusDiv.style.display = "block";
     }
   }
 
-  // Function to clear status
   function clearStatus() {
-    if (statusDiv) {
-      statusDiv.style.display = "none";
-      statusDiv.textContent = "";
+    if (elements.statusDiv) {
+      elements.statusDiv.style.display = "none";
+      elements.statusDiv.textContent = "";
     }
   }
 
-  // Function to show successful transcript extraction
   function showTranscriptSuccess(response) {
-    const statusDiv = document.getElementById("status");
-    const summaryContainer = document.getElementById("summaryContainer");
-    const summaryLanguage = document.getElementById("summaryLanguage").value;
+    if (!elements.statusDiv || !elements.summaryContainer) return;
+
+    const summaryLanguage = elements.languageSelect
+      ? elements.languageSelect.value
+      : "auto";
     const isDark = document.body.classList.contains("dark-theme");
 
-    // Determine language label for display
     let languageLabel = "original language";
     if (summaryLanguage && summaryLanguage !== "auto") {
-      switch (summaryLanguage) {
-        case "en":
-          languageLabel = "English";
-          break;
-        case "es":
-          languageLabel = "Spanish";
-          break;
-        case "fr":
-          languageLabel = "French";
-          break;
-        case "de":
-          languageLabel = "German";
-          break;
-        case "it":
-          languageLabel = "Italian";
-          break;
-        case "pt":
-          languageLabel = "Portuguese";
-          break;
-        case "ru":
-          languageLabel = "Russian";
-          break;
-        case "ja":
-          languageLabel = "Japanese";
-          break;
-        case "ko":
-          languageLabel = "Korean";
-          break;
-        case "zh":
-          languageLabel = "Chinese";
-          break;
-        default:
-          languageLabel = summaryLanguage;
-      }
+      const languageMap = {
+        en: "English",
+        es: "Spanish",
+        fr: "French",
+        de: "German",
+        it: "Italian",
+        pt: "Portuguese",
+        ru: "Russian",
+        ja: "Japanese",
+        ko: "Korean",
+        zh: "Chinese",
+      };
+      languageLabel = languageMap[summaryLanguage] || summaryLanguage;
     }
 
-    // Set success message
-    statusDiv.className = "success";
-    statusDiv.innerHTML = `
+    elements.statusDiv.className = "success";
+    elements.statusDiv.innerHTML = `
       <div><i class="fas fa-check-circle"></i>Transcript extracted successfully${
-        summaryLanguage !== "auto" ? ` and summarized in ${languageLabel}` : ""
+        summaryLanguage === "auto"
+          ? " and summarized in the original language"
+          : summaryLanguage !== "auto"
+          ? ` and summarized in ${languageLabel}`
+          : ""
       }</div>
       <div class="status-subtext">Summary is also displayed on the video page</div>
     `;
 
-    // Display the summary in the popup
     if (response.summary) {
-      summaryContainer.style.display = "block";
-      summaryContainer.innerHTML = `
+      elements.summaryContainer.style.display = "block";
+      elements.summaryContainer.innerHTML = `
         <h3>Summary${
           summaryLanguage !== "auto" ? ` (${languageLabel})` : ""
         }:</h3>
@@ -418,7 +422,7 @@ document.addEventListener("DOMContentLoaded", function () {
         </button>
       `;
 
-      // Add copy functionality
+      const copyButton = document.getElementById("copyButton");
       if (copyButton) {
         copyButton.addEventListener("click", function () {
           navigator.clipboard
@@ -441,7 +445,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Function to inject content script
   function injectContentScript(tabId) {
     chrome.scripting.executeScript(
       {
@@ -458,228 +461,225 @@ document.addEventListener("DOMContentLoaded", function () {
     );
   }
 
-  // Extract and summarize transcript
-  if (extractButton) {
-    extractButton.addEventListener("click", function () {
-      console.log("Extract button clicked");
-      extractButton.disabled = true;
-      showStatus("Working...", "success");
+  if (elements.extractButton) {
+    elements.extractButton.addEventListener(
+      "click",
+      throttle(function () {
+        console.log("Extract button clicked");
+        elements.extractButton.disabled = true;
+        showStatus("Working...", "success");
 
-      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        console.log("Tabs query completed:", tabs);
-        if (!tabs || tabs.length === 0) {
-          showStatus("No active tab found", "error");
-          extractButton.disabled = false;
-          return;
-        }
-
-        const currentTab = tabs[0];
-        console.log("Current tab:", currentTab);
-
-        // Check if we're on a YouTube page
-        if (
-          !currentTab.url ||
-          (!currentTab.url.includes("youtube.com/watch") &&
-            !currentTab.url.includes("m.youtube.com/watch"))
-        ) {
-          showStatus("Please navigate to a YouTube video first", "error");
-          extractButton.disabled = false;
-          return;
-        }
-
-        const apiKey = apiKeyInput ? apiKeyInput.value.trim() : "";
-        const summaryLanguage = languageSelect ? languageSelect.value : "auto";
-
-        if (!apiKey) {
-          showStatus("Please enter your OpenAI API key", "error");
-          extractButton.disabled = false;
-          return;
-        }
-
-        // Save settings
-        chrome.storage.sync.set({
-          openai_api_key: apiKey,
-          summaryLanguage: summaryLanguage,
-        });
-
-        // Create a function to handle direct script execution
-        function executeTranscriptExtraction() {
-          console.log("Executing direct transcript extraction");
-
-          // Add a flag to the window to prevent multiple executions
-          if (window.isExtractionInProgress) {
-            console.log(
-              "Extraction already in progress, ignoring duplicate call"
-            );
-            return;
-          }
-
-          window.isExtractionInProgress = true;
-
-          // Execute script directly in the tab context
-          chrome.scripting.executeScript(
-            {
-              target: { tabId: currentTab.id },
-              function: extractAndSummarizeInPage,
-              args: [apiKey, summaryLanguage],
-            },
-            (results) => {
-              console.log("Script execution results:", results);
-              extractButton.disabled = false;
-              window.isExtractionInProgress = false;
-
-              if (chrome.runtime.lastError) {
-                console.error("Runtime error:", chrome.runtime.lastError);
-
-                let errorMessage = "Error de comunicación con la página";
-                try {
-                  if (chrome.runtime.lastError.message) {
-                    errorMessage = chrome.runtime.lastError.message;
-                  } else if (typeof chrome.runtime.lastError === "string") {
-                    errorMessage = chrome.runtime.lastError;
-                  } else {
-                    errorMessage = JSON.stringify(chrome.runtime.lastError);
-                  }
-                } catch (e) {
-                  console.error("Error al procesar el objeto de error:", e);
-                }
-
-                console.log("Error detallado:", errorMessage);
-
-                // If there's an error with messaging, try direct execution
-                window.responseHandled = true;
-                executeTranscriptExtraction();
-                return;
-              }
-
-              if (!results || !results[0]) {
-                showStatus("Failed to execute transcript extraction", "error");
-                return;
-              }
-
-              const result = results[0].result;
-              if (result.error) {
-                showStatus("Error: " + result.error, "error");
-              } else if (result.success && result.summary) {
-                showTranscriptSuccess({
-                  success: true,
-                  summary: result.summary,
-                });
-                showStatus(
-                  "Transcript extracted and summarized successfully",
-                  "success"
-                );
-              } else {
-                showStatus("Unknown error occurred", "error");
-              }
+        chrome.tabs.query(
+          { active: true, currentWindow: true },
+          function (tabs) {
+            console.log("Tabs query completed:", tabs);
+            if (!tabs || tabs.length === 0) {
+              showStatus("No active tab found", "error");
+              elements.extractButton.disabled = false;
+              return;
             }
-          );
-        }
 
-        // First try to use messaging, fall back to direct execution
-        try {
-          console.log("Attempting to send message to content script");
+            const currentTab = tabs[0];
+            console.log("Current tab:", currentTab);
 
-          // Global flag to track if we've already handled a response
-          window.responseHandled = false;
+            if (
+              !currentTab.url ||
+              (!currentTab.url.includes("youtube.com/watch") &&
+                !currentTab.url.includes("m.youtube.com/watch"))
+            ) {
+              showStatus("Please navigate to a YouTube video first", "error");
+              elements.extractButton.disabled = false;
+              return;
+            }
 
-          // Set a timeout for message response
-          let messageTimeout;
-          const handleMessageTimeout = () => {
-            console.log(
-              "Message timeout occurred, checking if response was handled"
-            );
-            if (!window.responseHandled) {
-              console.log("No response was handled, trying direct execution");
-              window.responseHandled = true;
+            const apiKey = elements.apiKeyInput
+              ? elements.apiKeyInput.value.trim()
+              : "";
+            const summaryLanguage = elements.languageSelect
+              ? elements.languageSelect.value
+              : "auto";
+
+            if (!apiKey) {
+              showStatus("Please enter your OpenAI API key", "error");
+              elements.extractButton.disabled = false;
+              return;
+            }
+
+            chrome.storage.sync.set({
+              openai_api_key: apiKey,
+              summaryLanguage: summaryLanguage,
+            });
+
+            function executeTranscriptExtraction() {
+              console.log("Executing direct transcript extraction");
+
+              if (window.isExtractionInProgress) {
+                console.log(
+                  "Extraction already in progress, ignoring duplicate call"
+                );
+                return;
+              }
+
+              window.isExtractionInProgress = true;
+
+              chrome.scripting.executeScript(
+                {
+                  target: { tabId: currentTab.id },
+                  function: extractAndSummarizeInPage,
+                  args: [apiKey, summaryLanguage],
+                },
+                (results) => {
+                  console.log("Script execution results:", results);
+                  elements.extractButton.disabled = false;
+                  window.isExtractionInProgress = false;
+
+                  if (chrome.runtime.lastError) {
+                    console.error("Runtime error:", chrome.runtime.lastError);
+
+                    let errorMessage = "Error communicating with the page";
+                    try {
+                      if (chrome.runtime.lastError.message) {
+                        errorMessage = chrome.runtime.lastError.message;
+                      } else if (typeof chrome.runtime.lastError === "string") {
+                        errorMessage = chrome.runtime.lastError;
+                      } else {
+                        errorMessage = JSON.stringify(chrome.runtime.lastError);
+                      }
+                    } catch (e) {
+                      console.error("Error processing error object:", e);
+                    }
+
+                    console.log("Detailed error:", errorMessage);
+
+                    window.responseHandled = true;
+                    executeTranscriptExtraction();
+                    return;
+                  }
+
+                  if (!results || !results[0]) {
+                    showStatus(
+                      "Failed to execute transcript extraction",
+                      "error"
+                    );
+                    return;
+                  }
+
+                  const result = results[0].result;
+                  if (result.error) {
+                    showStatus("Error: " + result.error, "error");
+                  } else if (result.success && result.summary) {
+                    showTranscriptSuccess({
+                      success: true,
+                      summary: result.summary,
+                    });
+                    showStatus(
+                      "Transcript extracted and summarized successfully",
+                      "success"
+                    );
+                  } else {
+                    showStatus("Unknown error occurred", "error");
+                  }
+                }
+              );
+            }
+
+            try {
+              console.log("Attempting to send message to content script");
+
+              window.responseHandled = false;
+
+              let messageTimeout;
+              const handleMessageTimeout = () => {
+                console.log(
+                  "Message timeout occurred, checking if response was handled"
+                );
+                if (!window.responseHandled) {
+                  console.log(
+                    "No response was handled, trying direct execution"
+                  );
+                  window.responseHandled = true;
+                  executeTranscriptExtraction();
+                }
+              };
+
+              chrome.tabs.sendMessage(
+                currentTab.id,
+                {
+                  action: "extract_and_summarize",
+                  apiKey: apiKey,
+                  summaryLanguage: summaryLanguage,
+                },
+                function (response) {
+                  clearTimeout(messageTimeout);
+                  console.log("Message response received:", response);
+
+                  if (window.responseHandled) {
+                    console.log("Response already handled, ignoring this one");
+                    return;
+                  }
+
+                  if (chrome.runtime.lastError) {
+                    console.error("Runtime error:", chrome.runtime.lastError);
+
+                    let errorMessage = "Error communicating with the page";
+                    try {
+                      if (chrome.runtime.lastError.message) {
+                        errorMessage = chrome.runtime.lastError.message;
+                      } else if (typeof chrome.runtime.lastError === "string") {
+                        errorMessage = chrome.runtime.lastError;
+                      } else {
+                        errorMessage = JSON.stringify(chrome.runtime.lastError);
+                      }
+                    } catch (e) {
+                      console.error("Error processing error object:", e);
+                    }
+
+                    console.log("Detailed error:", errorMessage);
+
+                    window.responseHandled = true;
+                    executeTranscriptExtraction();
+                    return;
+                  }
+
+                  if (!response) {
+                    console.log("No response, trying direct execution");
+                    window.responseHandled = true;
+                    executeTranscriptExtraction();
+                    return;
+                  }
+
+                  window.responseHandled = true;
+                  elements.extractButton.disabled = false;
+
+                  if (response.error) {
+                    showStatus("Error: " + response.error, "error");
+                  } else if (response.success && response.summary) {
+                    showTranscriptSuccess(response);
+                  } else {
+                    showStatus("Unknown error in response", "error");
+                  }
+                }
+              );
+
+              messageTimeout = setTimeout(handleMessageTimeout, 3000);
+            } catch (error) {
+              console.error("Error sending message:", error);
               executeTranscriptExtraction();
             }
-          };
-
-          chrome.tabs.sendMessage(
-            currentTab.id,
-            {
-              action: "extract_and_summarize",
-              apiKey: apiKey,
-              summaryLanguage: summaryLanguage,
-            },
-            function (response) {
-              clearTimeout(messageTimeout);
-              console.log("Message response received:", response);
-
-              // Only proceed if we haven't handled a response yet
-              if (window.responseHandled) {
-                console.log("Response already handled, ignoring this one");
-                return;
-              }
-
-              if (chrome.runtime.lastError) {
-                console.error("Runtime error:", chrome.runtime.lastError);
-
-                let errorMessage = "Error de comunicación con la página";
-                try {
-                  if (chrome.runtime.lastError.message) {
-                    errorMessage = chrome.runtime.lastError.message;
-                  } else if (typeof chrome.runtime.lastError === "string") {
-                    errorMessage = chrome.runtime.lastError;
-                  } else {
-                    errorMessage = JSON.stringify(chrome.runtime.lastError);
-                  }
-                } catch (e) {
-                  console.error("Error al procesar el objeto de error:", e);
-                }
-
-                console.log("Error detallado:", errorMessage);
-
-                // If there's an error with messaging, try direct execution
-                window.responseHandled = true;
-                executeTranscriptExtraction();
-                return;
-              }
-
-              if (!response) {
-                console.log("No response, trying direct execution");
-                window.responseHandled = true;
-                executeTranscriptExtraction();
-                return;
-              }
-
-              // Mark that we've handled a response
-              window.responseHandled = true;
-              extractButton.disabled = false;
-
-              if (response.error) {
-                showStatus("Error: " + response.error, "error");
-              } else if (response.success && response.summary) {
-                showTranscriptSuccess(response);
-              } else {
-                showStatus("Unknown error in response", "error");
-              }
-            }
-          );
-
-          // Set timeout to fall back to direct execution if no response
-          messageTimeout = setTimeout(handleMessageTimeout, 3000);
-        } catch (error) {
-          console.error("Error sending message:", error);
-          executeTranscriptExtraction();
-        }
-      });
-    });
+          }
+        );
+      }, 1000)
+    );
   }
 
-  // Function to extract and summarize directly in page context
   function extractAndSummarizeInPage(apiKey, summaryLanguage) {
-    console.log("Script de extracción ejecutado en contexto de página");
+    console.log("Extraction script executed in page context");
 
     try {
-      // Solo JavaScript básico y APIs web estándar aquí
-      // No podemos usar chrome.* APIs dentro de la página
       return new Promise(async (resolve) => {
         try {
           console.log("Extracting transcript in page context");
 
-          // Check if summary already exists on the page
           if (document.querySelector("#youtube-transcript-summary")) {
             console.log("Summary already exists on the page, reusing it");
             const existingSummary = document.querySelector(
@@ -692,7 +692,6 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
           }
 
-          // Get video title
           const getVideoTitle = () => {
             const selectors = [
               "h1.ytd-video-primary-info-renderer",
@@ -710,14 +709,12 @@ document.addEventListener("DOMContentLoaded", function () {
             return "YouTube Video";
           };
 
-          // Simple transcript extraction by clicking the transcript button
           const extractTranscript = async () => {
-            console.log("Buscando botón de transcripción");
+            console.log("Looking for transcript button");
 
-            // Find transcript button
             const transcriptButtons = document.querySelectorAll("button");
             console.log(
-              `Encontrados ${transcriptButtons.length} botones en la página`
+              `Found ${transcriptButtons.length} buttons on the page`
             );
 
             const transcriptButton = Array.from(transcriptButtons).find(
@@ -725,7 +722,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 const hasText =
                   btn.textContent &&
                   (btn.textContent.toLowerCase().includes("transcript") ||
-                    btn.textContent.toLowerCase().includes("transcripción"));
+                    btn.textContent.toLowerCase().includes("transcript"));
 
                 const hasLabel =
                   btn.getAttribute("aria-label") &&
@@ -736,7 +733,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     btn
                       .getAttribute("aria-label")
                       .toLowerCase()
-                      .includes("transcripción"));
+                      .includes("transcript"));
 
                 return hasText || hasLabel;
               }
@@ -744,19 +741,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
             if (!transcriptButton) {
               console.log(
-                "Botón de transcripción no encontrado directamente, intentando con menú"
+                "Transcript button not found directly, trying with menu"
               );
 
-              // Try menu method
               const moreButtons = document.querySelectorAll(
-                'button[aria-label="More actions"], button[aria-label="Más acciones"]'
+                'button[aria-label="More actions"], button[aria-label="More actions"]'
               );
               console.log(
-                `Encontrados ${moreButtons.length} botones de acciones adicionales`
+                `Found ${moreButtons.length} additional action buttons`
               );
 
               if (moreButtons.length > 0) {
-                // Click the more actions button (not in the player)
                 let moreButton = null;
                 for (const btn of moreButtons) {
                   if (!btn.classList.contains("ytp-button")) {
@@ -766,67 +761,52 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
 
                 if (moreButton) {
-                  console.log("Haciendo clic en botón de acciones adicionales");
+                  console.log("Clicking on additional action button");
                   moreButton.click();
-                  await new Promise((r) => setTimeout(r, 2000)); // Mayor tiempo de espera
+                  await new Promise((r) => setTimeout(r, 2000));
 
-                  // Find transcript option
                   const menuItems = document.querySelectorAll(
                     "ytd-menu-service-item-renderer, tp-yt-paper-item"
                   );
-                  console.log(
-                    `Encontrados ${menuItems.length} elementos de menú`
-                  );
+                  console.log(`Found ${menuItems.length} menu items`);
 
-                  // Primero buscar por texto exacto luego por coincidencia parcial
                   let transcriptItem = Array.from(menuItems).find(
                     (item) =>
                       item &&
                       item.textContent &&
                       (item.textContent.toLowerCase().includes("transcript") ||
-                        item.textContent
-                          .toLowerCase()
-                          .includes("transcripción"))
+                        item.textContent.toLowerCase().includes("transcript"))
                   );
 
                   if (!transcriptItem) {
-                    console.log(
-                      "Elemento de transcripción no encontrado en el menú"
-                    );
-                    // Cerrar el menú que abrimos
+                    console.log("Transcript element not found in menu");
                     document.body.click();
                     throw new Error(
                       "Transcript option not found in menu. This video may not have captions available."
                     );
                   }
 
-                  console.log(
-                    "Haciendo clic en opción de transcripción en el menú"
-                  );
+                  console.log("Clicking on transcript option in menu");
                   transcriptItem.click();
-                  await new Promise((r) => setTimeout(r, 3000)); // Mayor tiempo de espera
+                  await new Promise((r) => setTimeout(r, 3000));
                 } else {
-                  console.log("Botón de acciones adicionales no adecuado");
+                  console.log("Additional action button not adequate");
                   throw new Error(
                     "More actions button not found. Try refreshing the page."
                   );
                 }
               } else {
-                console.log(
-                  "No se encontraron botones de acciones adicionales"
-                );
+                console.log("No additional action buttons found");
                 throw new Error(
                   "Transcript button not found. This video may not have captions available."
                 );
               }
             } else {
-              // Click the direct transcript button
-              console.log("Haciendo clic en botón de transcripción directo");
+              console.log("Clicking direct transcript button");
               transcriptButton.click();
-              await new Promise((r) => setTimeout(r, 3000)); // Mayor tiempo de espera
+              await new Promise((r) => setTimeout(r, 3000));
             }
 
-            // Get transcript text - intentar con diferentes selectores
             const selectors = [
               "ytd-transcript-segment-renderer",
               "ytd-transcript-body-renderer",
@@ -839,7 +819,7 @@ document.addEventListener("DOMContentLoaded", function () {
               const items = document.querySelectorAll(selector);
               if (items && items.length > 0) {
                 console.log(
-                  `Encontrados ${items.length} segmentos de transcripción con selector ${selector}`
+                  `Found ${items.length} transcript segments with selector ${selector}`
                 );
                 transcriptItems = items;
                 break;
@@ -847,7 +827,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
             if (!transcriptItems || transcriptItems.length === 0) {
-              console.log("No se encontraron segmentos de transcripción");
+              console.log("No transcript segments found");
               throw new Error(
                 "No transcript segments found. The video may not have captions."
               );
@@ -858,20 +838,24 @@ document.addEventListener("DOMContentLoaded", function () {
               transcript += item.textContent.trim() + " ";
             });
 
-            console.log(
-              `Transcripción obtenida: ${transcript.length} caracteres`
-            );
+            console.log(`Transcript obtained: ${transcript.length} characters`);
             return transcript.trim();
           };
 
-          // Function to call OpenAI API for summarization
           const summarize = async (transcript) => {
-            // Determine language for summary
-            let systemMessage =
-              "You are a helpful assistant that creates concise summaries of video transcripts.";
-            let userMessage = `Please provide a concise summary of this video transcript:\n\n${transcript}`;
+            let systemMessage = "";
+            let userMessage = "";
 
-            if (summaryLanguage && summaryLanguage !== "auto") {
+            if (summaryLanguage === "auto") {
+              systemMessage =
+                "You are a helpful assistant that creates concise summaries of video transcripts. " +
+                "You will detect the language of the transcript and create the summary in the SAME language as the original transcript.";
+
+              userMessage =
+                `Please provide a concise summary of this video transcript. ` +
+                `IMPORTANT: Detect the language of the transcript and create the summary in the SAME language as the original transcript. ` +
+                `Do NOT translate to English unless the original transcript is already in English.\n\n${transcript}`;
+            } else if (summaryLanguage) {
               const languageMap = {
                 en: "English",
                 es: "Spanish",
@@ -890,8 +874,7 @@ document.addEventListener("DOMContentLoaded", function () {
               userMessage = `Please provide a concise summary of this video transcript in ${languageName}:\n\n${transcript}`;
             }
 
-            // Call OpenAI API
-            console.log("Llamando a la API de OpenAI para resumir");
+            console.log("Calling OpenAI API to summarize");
             try {
               const response = await fetch(
                 "https://api.openai.com/v1/chat/completions",
@@ -922,20 +905,19 @@ document.addEventListener("DOMContentLoaded", function () {
               }
 
               const data = await response.json();
-              console.log("Resumen obtenido correctamente de OpenAI");
+              console.log("Summary obtained successfully from OpenAI");
               return data.choices[0].message.content;
             } catch (apiError) {
-              console.error("Error en llamada a OpenAI:", apiError);
+              console.error("Error in OpenAI call:", apiError);
               throw apiError;
             }
           };
 
-          // Main extraction logic
-          console.log("Obteniendo título del video");
+          console.log("Getting video title");
           const videoTitle = getVideoTitle();
-          console.log("Título del video:", videoTitle);
+          console.log("Video title:", videoTitle);
 
-          console.log("Extrayendo transcripción");
+          console.log("Extracting transcript");
           const transcript = await extractTranscript();
 
           if (!transcript || transcript.length < 50) {
@@ -944,21 +926,18 @@ document.addEventListener("DOMContentLoaded", function () {
             );
           }
 
-          // Summarize the transcript
-          console.log("Resumiendo la transcripción");
+          console.log("Summarizing the transcript");
           const summary = await summarize(transcript);
 
-          // Remove any existing summary containers first
-          console.log("Eliminando resúmenes existentes");
+          console.log("Removing existing summaries");
           const existingSummaries = document.querySelectorAll(
             "#youtube-transcript-summary"
           );
           existingSummaries.forEach((el) => el.remove());
 
-          // Display result on page
-          console.log("Mostrando resultado en la página");
+          console.log("Showing result on the page");
           const resultsDiv = document.createElement("div");
-          resultsDiv.id = "youtube-transcript-summary"; // Add ID for future reference
+          resultsDiv.id = "youtube-transcript-summary";
           resultsDiv.style.cssText = `
             position: fixed;
             top: 20px;
@@ -992,9 +971,8 @@ document.addEventListener("DOMContentLoaded", function () {
           `;
 
           document.body.appendChild(resultsDiv);
-          console.log("Resumen mostrado correctamente en la página");
+          console.log("Summary shown successfully on the page");
 
-          // Return success response
           resolve({ success: true, summary: summary });
         } catch (error) {
           console.error("Error in page context:", error);
@@ -1005,8 +983,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       });
     } catch (outerError) {
-      // Capturamos cualquier error general que pueda ocurrir fuera de la promesa
-      console.error("Error general en el script inyectado:", outerError);
+      console.error("General error in injected script:", outerError);
       return {
         success: false,
         error: outerError.message || "General script error",
@@ -1014,5 +991,5 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  console.log("=== POPUP LISTO ===");
+  console.log("=== POPUP READY ===");
 });

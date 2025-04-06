@@ -1,4 +1,4 @@
-# Instrucciones para Ejecutar la Aplicación
+# Instrucciones para la Extensión de YouTube Resumen
 
 ## Requisitos Previos
 
@@ -21,9 +21,9 @@ npm install
 
 ## Ejecución
 
-Hay dos formas de ejecutar la aplicación:
+Hay dos formas de trabajar con la extensión:
 
-### 1. Servidor de Desarrollo
+### 1. Modo Desarrollo
 
 Para iniciar el servidor de desarrollo con recarga automática:
 
@@ -31,11 +31,12 @@ Para iniciar el servidor de desarrollo con recarga automática:
 npm start
 ```
 
-Esto abrirá automáticamente la aplicación en tu navegador en `http://localhost:9000`
+Esto abrirá automáticamente la aplicación en tu navegador en `http://localhost:9000`.
+Ten en cuenta que algunas funcionalidades específicas de la extensión pueden no funcionar correctamente fuera del entorno de Chrome.
 
 ### 2. Compilación para Producción
 
-Para compilar la aplicación para producción:
+Para compilar la extensión para producción:
 
 ```
 npm run build
@@ -43,11 +44,19 @@ npm run build
 
 Esto generará los archivos optimizados en la carpeta `dist/`.
 
+### 3. Carga en Chrome
+
+Para cargar la extensión en Chrome:
+
+1. Abre Chrome y navega a `chrome://extensions/`
+2. Habilita el "Modo desarrollador" (esquina superior derecha)
+3. Haz clic en "Cargar desempaquetada"
+4. Selecciona la carpeta `dist` de tu proyecto
+
 ## Estructura de Archivos
 
-La aplicación ha sido modularizada para mejorar su mantenibilidad:
+La extensión ha sido modularizada para mejorar su mantenibilidad:
 
-- `js/modules/characterModule.js` - Gestión de personajes
 - `js/modules/transcriptModule.js` - Extracción de transcripciones
 - `js/modules/uiModule.js` - Interfaz de usuario
 - `js/utils.js` - Funciones de utilidad
@@ -55,12 +64,8 @@ La aplicación ha sido modularizada para mejorar su mantenibilidad:
 
 ## Funcionalidades
 
-1. **Galería de Personajes**:
+**Extracción de Transcripciones de YouTube**:
 
-   - Al hacer clic en un personaje se mostrará una ventana modal con detalles
-   - Los detalles incluyen: nombre, especie y género
-
-2. **Extracción de Transcripciones de YouTube**:
-   - Funciona cuando estás en una página de video de YouTube
-   - Extrae y muestra la transcripción
-   - Puede generar un resumen del contenido
+- Funciona cuando estás en una página de video de YouTube
+- Extrae y muestra la transcripción del video
+- Puede generar un resumen del contenido utilizando la API de OpenAI

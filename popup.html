@@ -329,28 +329,26 @@
       </ol>
     </div>
 
-    <!-- API Key Input -->
     <div class="form-group" id="apiKeyGroup">
       <label for="apiKey">OpenAI API Key:</label>
-      <input type="password" id="apiKey" placeholder="Ingresa tu API key" />
-      <button id="saveApiKey" class="btn btn-primary">Guardar</button>
-      <small class="note">Tu API key es almacenada solo en tu navegador.</small>
+      <input type="password" id="apiKey" placeholder="Enter your API key" />
+      <button id="saveApiKey" class="btn btn-primary">Save</button>
+      <small class="note">Your API key is stored only in your browser.</small>
     </div>
 
     <div class="form-group" id="apiKeySaved" style="display: none">
       <div class="status success" style="margin-bottom: 10px">
-        <i class="fas fa-check-circle"></i> API Key guardada correctamente
+        <i class="fas fa-check-circle"></i> API Key saved successfully
       </div>
       <button id="changeApiKey" class="btn btn-secondary">
-        <i class="fas fa-key"></i> Cambiar API Key
+        <i class="fas fa-key"></i> Change API Key
       </button>
     </div>
 
-    <!-- Language Selector -->
     <div class="form-group">
-      <label for="summaryLanguage">Idioma del Resumen:</label>
+      <label for="summaryLanguage">Summary Language:</label>
       <select id="summaryLanguage" class="language-select">
-        <option value="auto">Mismo que la transcripción (Auto)</option>
+        <option value="auto">Same as transcript (Auto)</option>
         <option value="en">English</option>
         <option value="es">Español</option>
         <option value="fr">Français</option>
@@ -362,12 +360,9 @@
         <option value="ko">한국어</option>
         <option value="zh">中文</option>
       </select>
-      <small class="note"
-        >Selecciona el idioma para el resumen del video.</small
-      >
+      <small class="note">Select the language for the video summary.</small>
     </div>
 
-    <!-- Action Buttons -->
     <div class="actions">
       <button id="extractButton" class="btn btn-primary">
         <i class="fas fa-magic"></i> Extract & Summarize
@@ -395,13 +390,9 @@
       </ol>
     </div>
 
-    <!-- Status -->
     <div id="status" class="status"></div>
 
-    <!-- Summary Container -->
-    <div id="summaryContainer" class="summary-container">
-      <!-- Content will be filled by JavaScript -->
-    </div>
+    <div id="summaryContainer" class="summary-container"></div>
 
     <div
       style="margin-top: 15px; font-size: 12px; color: #666; text-align: center"

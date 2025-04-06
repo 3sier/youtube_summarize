@@ -1,9 +1,6 @@
-// UI Module - Manages UI creation and styling
-
-// CSS styles for the transcript UI
 const transcriptStyles = `
   .transcript-container {
-    max-width: 1200px;
+    max-width: 800px;
     margin: 0 auto 30px auto;
     padding: 20px;
     background-color: #fff;
@@ -79,7 +76,6 @@ const transcriptStyles = `
   }
 `;
 
-// Function to create the UI for transcript extraction
 function createTranscriptUI() {
   const container = document.createElement("div");
   container.className = "transcript-container";
@@ -92,23 +88,22 @@ function createTranscriptUI() {
     <div id="summary-result" class="summary-result"></div>
   `;
 
-  document.body.insertBefore(
-    container,
-    document.querySelector(".character-grid").parentNode
-  );
+  const transcriptContainer = document.getElementById("transcript-container");
+  if (transcriptContainer) {
+    transcriptContainer.appendChild(container);
+  } else {
+    document.querySelector(".main-container").appendChild(container);
+  }
 
-  // Add styles to head
   addStylesToHead(transcriptStyles);
 }
 
-// Function to add styles to head
 function addStylesToHead(stylesText) {
   const style = document.createElement("style");
   style.textContent = stylesText;
   document.head.appendChild(style);
 }
 
-// Export module functions
 export default {
   createTranscriptUI,
   addStylesToHead,

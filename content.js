@@ -1,10 +1,24 @@
 console.log("=== YOUTUBE TRANSCRIPT EXTRACTOR CONTENT SCRIPT LOADED ===");
 
+const throttle = (func, limit) => {
+  let inThrottle;
+  return function () {
+    const args = arguments;
+    const context = this;
+    if (!inThrottle) {
+      func.apply(context, args);
+      inThrottle = true;
+      setTimeout(() => (inThrottle = false), limit);
+    }
+  };
+};
+
 let cachedElements = {
   transcriptPanel: null,
   languageSelector: null,
   menuButton: null,
   moreActionsButton: null,
+  transcriptItems: null,
 };
 
 function isMobileYouTube() {
@@ -40,13 +54,16 @@ async function getTranscript() {
   try {
     console.log("Attempting to get transcript with improved detection...");
 
-    // Check if we're on mobile YouTube
     if (isMobileYouTube()) {
       console.log("Detected mobile YouTube interface");
       return await getMobileTranscript();
     }
 
-    // Try to find the transcript panel directly
+    if (cachedElements.transcriptPanel) {
+      console.log("Using cached transcript panel");
+      return extractTranscriptFromPanel(cachedElements.transcriptPanel);
+    }
+
     const transcriptPanelSelectors = [
       "ytd-transcript-search-panel-renderer",
       "ytd-transcript-renderer",
@@ -55,23 +72,15 @@ async function getTranscript() {
       "ytd-transcript-body-renderer",
     ];
 
-    // Cache the transcript panel if found
-    if (!cachedElements.transcriptPanel) {
-      for (const selector of transcriptPanelSelectors) {
-        const panel = document.querySelector(selector);
-        if (panel) {
-          cachedElements.transcriptPanel = panel;
-          console.log(`Found transcript panel with selector: ${selector}`);
-          break;
-        }
+    for (const selector of transcriptPanelSelectors) {
+      const panel = document.querySelector(selector);
+      if (panel) {
+        cachedElements.transcriptPanel = panel;
+        console.log(`Found transcript panel with selector: ${selector}`);
+        return extractTranscriptFromPanel(panel);
       }
     }
 
-    if (cachedElements.transcriptPanel) {
-      return extractTranscriptFromPanel(cachedElements.transcriptPanel);
-    }
-
-    // Try to find transcript button
     const transcriptButtonSelectors = [
       '[aria-label="Open transcript"]',
       'button[aria-label*="transcript" i]',
@@ -87,7 +96,6 @@ async function getTranscript() {
         button.click();
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        // Look for the panel again
         for (const panelSelector of transcriptPanelSelectors) {
           const panel = document.querySelector(panelSelector);
           if (panel) {
@@ -98,11 +106,9 @@ async function getTranscript() {
       }
     }
 
-    // Method 1: Try to find transcript button in three dots menu
     try {
       console.log("Trying method 1: Three dots menu");
 
-      // Cache the menu button if not already cached
       if (!cachedElements.menuButton) {
         cachedElements.menuButton = document.querySelector(
           'button.ytp-button[aria-label="More actions"]'
@@ -136,7 +142,7 @@ async function getTranscript() {
       console.log("First method failed:", error.message);
     }
 
-    throw new Error("No se pudo encontrar o abrir la transcripción completa");
+    throw new Error("Could not find or open the complete transcript");
   } catch (error) {
     console.error("Failed to get transcript:", error);
     throw error;
@@ -147,10 +153,8 @@ async function getMobileTranscript() {
   console.log("Attempting to extract transcript from mobile interface");
 
   try {
-    // Method 1: Try to enable captions and collect them
     try {
       console.log("Trying to find captions button on mobile");
-      // Look for the captions button on mobile
       const captionsButtons = document.querySelectorAll("button");
       const captionsButton = Array.from(captionsButtons).find(
         (btn) =>
@@ -161,7 +165,6 @@ async function getMobileTranscript() {
 
       if (captionsButton) {
         console.log("Found captions button, checking if enabled");
-        // Check if captions are already enabled
         const isEnabled =
           captionsButton.getAttribute("aria-pressed") === "true" ||
           captionsButton.classList.contains("active");
@@ -172,7 +175,6 @@ async function getMobileTranscript() {
           await new Promise((resolve) => setTimeout(resolve, 1500));
         }
 
-        // Try to collect captions
         return await collectMobileCaptionsOverTime();
       } else {
         throw new Error("Captions button not found on mobile interface");
@@ -180,11 +182,9 @@ async function getMobileTranscript() {
     } catch (error) {
       console.log("Mobile caption method failed:", error);
 
-      // Method 2: Try to find and open transcript panel on mobile
       try {
         console.log("Trying to find transcript panel on mobile");
 
-        // Look for the more options button
         const moreButtons = document.querySelectorAll("button");
         const moreButton = Array.from(moreButtons).find(
           (btn) =>
@@ -197,7 +197,6 @@ async function getMobileTranscript() {
           moreButton.click();
           await new Promise((resolve) => setTimeout(resolve, 1500));
 
-          // Look for transcript option
           const menuItems = document.querySelectorAll(
             'a, button, div[role="button"]'
           );
@@ -213,10 +212,8 @@ async function getMobileTranscript() {
             transcriptItem.click();
             await new Promise((resolve) => setTimeout(resolve, 2000));
 
-            // Check for language selector on mobile - IMPROVED VERSION
             await selectMobileOriginalLanguage();
 
-            // Try to extract transcript
             const transcriptItems = document.querySelectorAll(
               ".transcript-item, .caption-line"
             );
@@ -239,7 +236,6 @@ async function getMobileTranscript() {
       } catch (method2Error) {
         console.log("Mobile transcript panel method failed:", method2Error);
 
-        // Method 3: Last resort - try to capture video content directly
         try {
           console.log("Trying to find captions on player directly");
           const captionElements = document.querySelectorAll(
@@ -271,18 +267,17 @@ async function selectMobileOriginalLanguage() {
   try {
     console.log("Attempting to select original language on mobile");
 
-    // Find language selector buttons
     const languageButtons = document.querySelectorAll(
-      'button, [role="button"], .dropdown-trigger, [aria-label*="language" i], [aria-label*="idioma" i]'
+      'button, [role="button"], .dropdown-trigger, [aria-label*="language" i], [aria-label*="language" i]'
     );
 
     const languageButton = Array.from(languageButtons).find(
       (btn) =>
         btn.textContent &&
         (btn.textContent.toLowerCase().includes("language") ||
-          btn.textContent.toLowerCase().includes("idioma") ||
+          btn.textContent.toLowerCase().includes("language") ||
           btn.getAttribute("aria-label")?.toLowerCase().includes("language") ||
-          btn.getAttribute("aria-label")?.toLowerCase().includes("idioma"))
+          btn.getAttribute("aria-label")?.toLowerCase().includes("language"))
     );
 
     if (!languageButton) {
@@ -290,7 +285,6 @@ async function selectMobileOriginalLanguage() {
       return;
     }
 
-    // Get current selected language
     const currentLanguage =
       languageButton.textContent?.trim() ||
       languageButton.getAttribute("aria-label") ||
@@ -298,10 +292,9 @@ async function selectMobileOriginalLanguage() {
 
     console.log("Current mobile language appears to be: " + currentLanguage);
 
-    // Skip if already not English
     const isEnglish =
       currentLanguage.toLowerCase().includes("english") ||
-      currentLanguage.toLowerCase().includes("inglés");
+      currentLanguage.toLowerCase().includes("english");
 
     if (!isEnglish) {
       console.log(
@@ -310,30 +303,27 @@ async function selectMobileOriginalLanguage() {
       return;
     }
 
-    // Click to open language options
     console.log("Opening language options on mobile");
     languageButton.click();
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    // Look for options
     const options = document.querySelectorAll(
       '.menu-item, [role="menuitem"], li, .ytp-panel-menu-item'
     );
     if (!options || options.length === 0) {
       console.log("No language options found on mobile");
-      document.body.click(); // Close menu
+      document.body.click();
       return;
     }
 
     console.log(`Found ${options.length} language options on mobile`);
 
-    // Define keywords to look for
     const originalKeywords = [
       "original",
       "auto",
       "automatic",
-      "automático",
-      "generado",
+      "automatic",
+      "generated",
     ];
     const nonEnglishKeywords = [
       "español",
@@ -356,7 +346,6 @@ async function selectMobileOriginalLanguage() {
       "chinese",
     ];
 
-    // Try to find original language first
     let selectedOption = null;
 
     for (const option of options) {
@@ -368,7 +357,6 @@ async function selectMobileOriginalLanguage() {
       }
     }
 
-    // If no original language found, try non-English language
     if (!selectedOption) {
       for (const option of options) {
         const text = option.textContent?.toLowerCase() || "";
@@ -380,12 +368,11 @@ async function selectMobileOriginalLanguage() {
       }
     }
 
-    // Select found option or use first non-English option as last resort
     if (!selectedOption && options.length > 0) {
       const firstOptionText = options[0].textContent?.toLowerCase() || "";
       if (
         !firstOptionText.includes("english") &&
-        !firstOptionText.includes("inglés")
+        !firstOptionText.includes("english")
       ) {
         selectedOption = options[0];
         console.log(
@@ -405,11 +392,8 @@ async function selectMobileOriginalLanguage() {
   } catch (error) {
     console.warn("Error selecting language on mobile:", error);
     try {
-      // Try to close any open menu
       document.body.click();
-    } catch (e) {
-      // Ignore
-    }
+    } catch (e) {}
   }
 }
 
@@ -418,10 +402,9 @@ async function collectMobileCaptionsOverTime() {
   let captions = [];
   let lastCaptionText = "";
   let duplicateCount = 0;
+  let captionElements = null;
 
-  // Create caption collection interval
   return new Promise((resolve, reject) => {
-    // Set timeout to stop collection after 45 seconds
     const timeout = setTimeout(() => {
       clearInterval(interval);
 
@@ -433,28 +416,32 @@ async function collectMobileCaptionsOverTime() {
       } else {
         reject(new Error("No captions could be collected from mobile player"));
       }
-    }, 45000);
+    }, 30000);
 
-    // Collect captions every 500ms
     const interval = setInterval(() => {
       try {
-        // Try multiple selector types for mobile captions
-        const selectors = [
-          ".caption-window",
-          ".captions-text",
-          ".ytp-caption-segment",
-        ];
-        let captionText = "";
+        if (!captionElements) {
+          const selectors = [
+            ".caption-window",
+            ".captions-text",
+            ".ytp-caption-segment",
+          ];
 
-        for (const selector of selectors) {
-          const elements = document.querySelectorAll(selector);
-          if (elements && elements.length > 0) {
-            elements.forEach((el) => {
-              captionText += el.textContent.trim() + " ";
-            });
-            break;
+          for (const selector of selectors) {
+            const elements = document.querySelectorAll(selector);
+            if (elements && elements.length > 0) {
+              captionElements = elements;
+              break;
+            }
           }
         }
+
+        if (!captionElements) return;
+
+        let captionText = "";
+        captionElements.forEach((el) => {
+          captionText += el.textContent.trim() + " ";
+        });
 
         captionText = captionText.trim();
 
@@ -466,9 +453,7 @@ async function collectMobileCaptionsOverTime() {
           duplicateCount++;
         }
 
-        // If we see the same caption for 10 checks and have collected some captions,
-        // assume the video is paused or ended
-        if (duplicateCount > 10 && captions.length > 5) {
+        if (duplicateCount > 5 && captions.length > 5) {
           clearInterval(interval);
           clearTimeout(timeout);
           console.log(
@@ -479,12 +464,11 @@ async function collectMobileCaptionsOverTime() {
       } catch (error) {
         console.error("Error collecting mobile captions:", error);
       }
-    }, 500);
+    }, 1000);
   });
 }
 
 async function extractTranscriptAfterOpen() {
-  // Try multiple selectors for transcript segments
   const selectors = [
     "ytd-transcript-segment-renderer",
     "ytd-transcript-segment-list-renderer",
@@ -516,7 +500,14 @@ async function extractTranscriptAfterOpen() {
 function extractTranscriptFromPanel(panel) {
   console.log("Extracting transcript from panel...");
 
-  // Cache DOM queries
+  if (cachedElements.transcriptItems) {
+    console.log("Using cached transcript items");
+    const textArray = Array.from(cachedElements.transcriptItems).map(
+      (segment) => segment.textContent.trim()
+    );
+    return textArray.join(" ");
+  }
+
   const selectors = [
     "ytd-transcript-segment-renderer",
     "ytd-transcript-body-renderer",
@@ -524,35 +515,27 @@ function extractTranscriptFromPanel(panel) {
     ".ytd-transcript-segment-renderer",
   ];
 
-  let segments = null;
-  let transcript = "";
-
-  // Use a single loop to find segments
   for (const selector of selectors) {
     const elements = panel.querySelectorAll(selector);
     if (elements && elements.length > 0) {
       console.log(
         `Found ${elements.length} transcript segments using selector: ${selector}`
       );
-      segments = elements;
-      break;
+      cachedElements.transcriptItems = elements;
+
+      const textArray = Array.from(elements).map((segment) =>
+        segment.textContent.trim()
+      );
+      const transcript = textArray.join(" ");
+
+      console.log(
+        `Extracted transcript with ${elements.length} segments and ${transcript.length} characters`
+      );
+      return transcript.trim();
     }
   }
 
-  if (!segments || segments.length === 0) {
-    throw new Error("No transcript segments found in panel");
-  }
-
-  // Use a more efficient way to concatenate text
-  const textArray = Array.from(segments).map((segment) =>
-    segment.textContent.trim()
-  );
-  transcript = textArray.join(" ");
-
-  console.log(
-    `Extracted full transcript with ${segments.length} segments and ${transcript.length} characters`
-  );
-  return transcript.trim();
+  throw new Error("No transcript segments found in panel");
 }
 
 async function collectCaptionsOverTime() {
@@ -561,8 +544,8 @@ async function collectCaptionsOverTime() {
   let lastCaptionText = "";
   let duplicateCount = 0;
   let lastCollectionTime = Date.now();
-  const COLLECTION_INTERVAL = 1000;
-  const MAX_DUPLICATES = 5;
+  const COLLECTION_INTERVAL = 2000;
+  const MAX_DUPLICATES = 3;
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -576,7 +559,7 @@ async function collectCaptionsOverTime() {
       } else {
         reject(new Error("No captions could be collected"));
       }
-    }, 20000);
+    }, 15000);
 
     const interval = setInterval(() => {
       try {
@@ -598,7 +581,7 @@ async function collectCaptionsOverTime() {
             duplicateCount++;
           }
 
-          if (duplicateCount > MAX_DUPLICATES && captions.length > 5) {
+          if (duplicateCount >= MAX_DUPLICATES && captions.length > 3) {
             clearInterval(interval);
             clearTimeout(timeout);
             console.log(
@@ -619,24 +602,53 @@ async function summarizeTranscript(
   apiKey,
   summaryLanguage = "auto"
 ) {
+  const MAX_TRANSCRIPT_LENGTH = 12000;
+  let trimmedTranscript = transcript;
+
+  if (transcript.length > MAX_TRANSCRIPT_LENGTH) {
+    console.log(
+      `Transcript too long (${transcript.length} chars), trimming to ${MAX_TRANSCRIPT_LENGTH}`
+    );
+    const firstPart = transcript.substring(0, 4000);
+    const middleStart = Math.floor((transcript.length - 4000) / 2);
+    const middlePart = transcript.substring(middleStart, middleStart + 4000);
+    const lastPart = transcript.substring(transcript.length - 4000);
+
+    trimmedTranscript = `${firstPart}\n\n[...]\n\n${middlePart}\n\n[...]\n\n${lastPart}`;
+  }
+
   try {
-    if (!transcript || transcript.length < 10) {
+    if (!trimmedTranscript || trimmedTranscript.length < 10) {
       throw new Error("Transcript is too short or empty");
     }
 
-    console.log("=== INICIANDO LLAMADA A OPENAI API ===");
-    console.log("Longitud del transcript:", transcript.length);
+    console.log("=== STARTING OPENAI API CALL ===");
+    console.log("Transcript length:", trimmedTranscript.length);
     console.log(
-      "API Key (primeros 5 caracteres):",
+      "API Key (first 5 characters):",
       apiKey.substring(0, 5) + "..."
     );
     console.log("Summary language:", summaryLanguage);
 
-    let systemMessage =
-      "You are a helpful assistant that creates concise summaries of video transcripts.";
-    let userMessage = `Please provide a concise summary of this video transcript:\n\n${transcript}`;
+    let systemMessage = "";
+    let userMessage = "";
 
-    if (summaryLanguage && summaryLanguage !== "auto") {
+    if (summaryLanguage === "auto") {
+      const sampleText = trimmedTranscript.substring(0, 200);
+
+      systemMessage =
+        "You are a helpful assistant that creates concise summaries of video transcripts. " +
+        "You will detect the language of the transcript and create the summary in the SAME language as the original transcript.";
+
+      userMessage =
+        `Please provide a concise summary of this video transcript. ` +
+        `IMPORTANT: Detect the language of the transcript and create the summary in the SAME language as the original transcript. ` +
+        `Do NOT translate to English unless the original transcript is already in English.\n\n${trimmedTranscript}`;
+
+      console.log(
+        "Auto language detection enabled. Will summarize in the original transcript language."
+      );
+    } else {
       let languageName = "";
 
       switch (summaryLanguage) {
@@ -675,7 +687,7 @@ async function summarizeTranscript(
       }
 
       systemMessage = `You are a helpful assistant that creates concise summaries of video transcripts in ${languageName}.`;
-      userMessage = `Please provide a concise summary of this video transcript in ${languageName}:\n\n${transcript}`;
+      userMessage = `Please provide a concise summary of this video transcript in ${languageName}:\n\n${trimmedTranscript}`;
       console.log(`Setting summary language to ${languageName}`);
     }
 
@@ -686,7 +698,7 @@ async function summarizeTranscript(
         {
           role: "user",
           content: `${userMessage.substring(0, 100)}... (${
-            transcript.length
+            trimmedTranscript.length
           } caracteres)`,
         },
       ],
@@ -698,7 +710,7 @@ async function summarizeTranscript(
       JSON.stringify(requestBody).substring(0, 500) + "..."
     );
 
-    console.log("Realizando fetch a OpenAI API...");
+    console.log("Making fetch to OpenAI API...");
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -715,11 +727,11 @@ async function summarizeTranscript(
       }),
     });
 
-    console.log("Respuesta recibida, status:", response.status);
+    console.log("Response received, status:", response.status);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
-      console.error("Error de la API de OpenAI:", errorData);
+      console.error("OpenAI API error:", errorData);
       throw new Error(
         `OpenAI API error (${response.status}): ${
           errorData ? JSON.stringify(errorData) : "Unknown error"
@@ -734,19 +746,18 @@ async function summarizeTranscript(
     );
 
     const summary = data.choices[0].message.content;
-    console.log("Resumen generado correctamente, longitud:", summary.length);
-    console.log("=== FIN DE LLAMADA A OPENAI API ===");
+    console.log("Summary generated successfully, length:", summary.length);
+    console.log("=== END OF OPENAI API CALL ===");
 
     return summary;
   } catch (error) {
-    console.error("ERROR DE SUMMARIZACIÓN:", error);
-    console.error("Mensaje completo:", error.message);
+    console.error("SUMMARIZATION ERROR:", error);
+    console.error("Complete message:", error.message);
     console.error("Stack trace:", error.stack);
     throw new Error("Failed to summarize transcript: " + error.message);
   }
 }
 
-// Listen for messages from popup and respond to let popup know we're ready
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   console.log("Message received in content script:", request.action);
 
@@ -757,7 +768,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.error("Transcription error:", error);
         sendResponse({ success: false, error: error.message });
       });
-    return true; // Will respond asynchronously
+    return true;
   }
 
   if (request.action === "extract_and_summarize") {
@@ -767,11 +778,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.error("Extraction error:", error);
         sendResponse({ success: false, error: error.message });
       });
-    return true; // Will respond asynchronously
+    return true;
   }
 });
 
-// Main transcription handler
 async function handleTranscription(apiKey, summaryLanguage = "auto") {
   try {
     console.log("Starting transcription process...");
@@ -798,7 +808,7 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
       console.log("Falling back to collecting captions over time...");
 
       showUserNotice(
-        "Recopilando subtítulos en tiempo real. Por favor, deja que el video se reproduzca para obtener más subtítulos."
+        "Collecting real-time captions. Please let the video play to get more captions."
       );
 
       transcript = await getTranscript();
@@ -886,12 +896,16 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
     resultsDiv.innerHTML = `
       <h3 style="font-size: 28px; margin-bottom: 20px; color: inherit;">${videoTitle}</h3>
       <h4 style="font-size: 26px; margin-bottom: 20px; color: inherit;">Summary${
-        summaryLanguage !== "auto" ? ` (${languageLabel})` : ""
+        summaryLanguage === "auto"
+          ? " (in original language)"
+          : summaryLanguage !== "auto"
+          ? ` (${languageLabel})`
+          : ""
       }:</h4>
       <p style="font-size: 24px; margin-bottom: 20px; line-height: 1.8; color: inherit;">${summary}</p>
       ${
         isPartial
-          ? '<p style="color: #ffa366; font-size: 18px;">Nota: Este resumen se basa en una transcripción parcial. Para mejores resultados, intenta usar la opción "Mostrar transcripción" del video.</p>'
+          ? '<p style="color: #ffa366; font-size: 18px;">Note: This summary is based on a partial transcript. For better results, try using the "Show transcript" option in the video.</p>'
           : ""
       }
       <button onclick="this.parentElement.remove()" style="
@@ -956,14 +970,11 @@ async function handleTranscription(apiKey, summaryLanguage = "auto") {
   }
 }
 
-// Función para obtener la transcripción completa del video utilizando la API de YouTube
 async function getFullTranscript() {
   try {
     console.log("Attempting to get FULL transcript...");
 
-    // Primero, intentar obtener la transcripción a través del panel de transcripción
     try {
-      // Método 1: Buscar directamente el panel de transcripción (si ya está abierto)
       const transcriptPanel = document.querySelector(
         "ytd-transcript-search-panel-renderer"
       );
@@ -972,7 +983,6 @@ async function getFullTranscript() {
         return extractTranscriptFromPanel(transcriptPanel);
       }
 
-      // Método 2: Intentar abrir el menú de transcripción desde botón específico (en dispositivos más nuevos)
       const transcriptButton =
         document.querySelector('[aria-label="Open transcript"]') ||
         document.querySelector('button[aria-label*="transcript" i]');
@@ -990,7 +1000,6 @@ async function getFullTranscript() {
         }
       }
 
-      // Método 3: Intentar acceder por el botón de "..." en la descripción del video
       const moreActionsButtons = document.querySelectorAll(
         'button[aria-label="More actions"]'
       );
@@ -1008,7 +1017,6 @@ async function getFullTranscript() {
         descriptionMoreButton.click();
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
-        // Buscar opción de mostrar transcripción
         const menuItems = document.querySelectorAll(
           "ytd-menu-service-item-renderer"
         );
@@ -1022,7 +1030,6 @@ async function getFullTranscript() {
           showTranscriptItem.click();
           await new Promise((resolve) => setTimeout(resolve, 2000));
 
-          // Obtener panel de transcripción
           const transcriptPanel = document.querySelector(
             "ytd-transcript-search-panel-renderer"
           );
@@ -1032,13 +1039,11 @@ async function getFullTranscript() {
         }
       }
 
-      // Método 4: Último intento - usar la API de YouTube si es posible
       const videoId = getVideoId();
       if (!videoId) {
         throw new Error("No video ID found");
       }
 
-      // Intentar acceder a la transcripción desde botón de puntos suspensivos del reproductor
       console.log("Trying through player more actions button...");
       const menuButton = document.querySelector(
         'button.ytp-button[aria-label="More actions"]'
@@ -1059,12 +1064,11 @@ async function getFullTranscript() {
           transcriptButton.click();
           await new Promise((resolve) => setTimeout(resolve, 2000));
 
-          // Buscar contenedor de transcripción
           return await extractTranscriptAfterOpen();
         }
       }
 
-      throw new Error("No se pudo encontrar o abrir la transcripción completa");
+      throw new Error("Could not find or open the complete transcript");
     } catch (error) {
       throw new Error(`Failed to get full transcript: ${error.message}`);
     }
@@ -1074,12 +1078,10 @@ async function getFullTranscript() {
   }
 }
 
-// Helper function to detect available transcript languages and select the original one
 async function selectOriginalLanguage(panel) {
   try {
     console.log("Attempting to select original language for transcript...");
 
-    // Common selectors for language dropdowns in YouTube
     const languageSelectors = [
       'paper-dropdown-menu[label*="language" i]',
       'paper-dropdown-menu[aria-label*="language" i]',
@@ -1091,7 +1093,6 @@ async function selectOriginalLanguage(panel) {
       '[aria-label*="language" i]',
     ];
 
-    // Find language selector
     let languageSelector = null;
     for (const selector of languageSelectors) {
       const element =
@@ -1103,7 +1104,6 @@ async function selectOriginalLanguage(panel) {
       }
     }
 
-    // If no language selector found, return (likely only one language available)
     if (!languageSelector) {
       console.log(
         "No language selector found, assuming original language is already selected"
@@ -1111,7 +1111,6 @@ async function selectOriginalLanguage(panel) {
       return;
     }
 
-    // Get currently selected language
     const selectedLanguage =
       languageSelector.textContent?.trim() ||
       languageSelector.innerText?.trim() ||
@@ -1120,10 +1119,9 @@ async function selectOriginalLanguage(panel) {
 
     console.log(`Current selected language appears to be: ${selectedLanguage}`);
 
-    // Check if "English" is in the selected language
     const isEnglish =
       selectedLanguage.toLowerCase().includes("english") ||
-      selectedLanguage.toLowerCase().includes("inglés") ||
+      selectedLanguage.toLowerCase().includes("english") ||
       selectedLanguage.toLowerCase() === "english";
 
     if (isEnglish) {
@@ -1134,18 +1132,14 @@ async function selectOriginalLanguage(panel) {
       console.log(
         "Non-English language already selected, likely the original language"
       );
-      // If already a non-English language, we can use that (likely original)
       return;
     }
 
-    // Check if dropdown has multiple options
-    // Try to click the dropdown to see the options
     try {
       console.log("Attempting to check available languages...");
       languageSelector.click();
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      // Look for language options
       const optionSelectors = [
         "paper-item",
         "yt-dropdown-item",
@@ -1168,24 +1162,21 @@ async function selectOriginalLanguage(panel) {
       }
 
       if (languageOptions.length > 0) {
-        // Log available languages
         const languages = languageOptions.map(
           (option) => option.textContent?.trim() || "Unknown"
         );
         console.log("Available languages:", languages);
 
-        // Look for cues that indicate the original language
         const originalLanguageKeywords = [
           "original",
           "auto-generated",
           "auto generated",
           "automatic",
-          "automático",
-          "automática",
-          "generado automáticamente",
+          "automatic",
+          "automatic",
+          "automatically generated",
         ];
 
-        // Look for non-English languages first
         const nonEnglishKeywords = [
           "español",
           "spanish",
@@ -1207,7 +1198,6 @@ async function selectOriginalLanguage(panel) {
           "chinese",
         ];
 
-        // First priority: Find options with original language keywords
         let originalOption = null;
         for (const option of languageOptions) {
           const text = option.textContent?.toLowerCase() || "";
@@ -1222,7 +1212,6 @@ async function selectOriginalLanguage(panel) {
           }
         }
 
-        // Second priority: Find non-English language options
         if (!originalOption) {
           for (const option of languageOptions) {
             const text = option.textContent?.toLowerCase() || "";
@@ -1234,31 +1223,27 @@ async function selectOriginalLanguage(panel) {
           }
         }
 
-        // Third priority: If not English, use the first option
         if (!originalOption && languageOptions.length > 0) {
           const firstOptionText =
             languageOptions[0].textContent?.toLowerCase() || "";
           if (
             !firstOptionText.includes("english") &&
-            !firstOptionText.includes("inglés")
+            !firstOptionText.includes("english")
           ) {
             originalOption = languageOptions[0];
             console.log(`Using first non-English option: ${firstOptionText}`);
           }
         }
 
-        // If we found a suitable option, select it
         if (originalOption) {
           console.log("Selecting original/non-English language option");
           originalOption.click();
           await new Promise((resolve) => setTimeout(resolve, 1500));
           return;
         } else {
-          // If all options are English or we couldn't identify a good option
           console.log(
             "No clear original/non-English language found, closing dropdown"
           );
-          // Close the dropdown without changing selection (click outside)
           document.body.click();
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
@@ -1266,35 +1251,28 @@ async function selectOriginalLanguage(panel) {
         console.log(
           "No language options found, likely only one language available"
         );
-        // Close dropdown
         document.body.click();
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
     } catch (error) {
       console.warn("Error checking language options:", error);
-      // Try to close any open dropdown by clicking outside
       document.body.click();
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
   } catch (error) {
     console.warn("Error in selectOriginalLanguage:", error);
-    // This is a helper function, so we'll just log the error and continue
   }
 }
 
-// Function to show notification to user
 function showUserNotice(message) {
-  // Remove any existing notice first
   removeUserNotice();
 
   const noticeDiv = document.createElement("div");
   noticeDiv.id = "transcript-collector-notice";
 
-  // Use CSS classes instead of inline styles for better performance
   noticeDiv.className = "transcript-notice";
   noticeDiv.textContent = message;
 
-  // Add styles to head instead of inline
   if (!document.getElementById("transcript-notice-style")) {
     const style = document.createElement("style");
     style.id = "transcript-notice-style";
@@ -1319,11 +1297,9 @@ function showUserNotice(message) {
 
   document.body.appendChild(noticeDiv);
 
-  // Auto-hide after 15 seconds
   setTimeout(removeUserNotice, 15000);
 }
 
-// Function to remove user notice
 function removeUserNotice() {
   const notice = document.getElementById("transcript-collector-notice");
   if (notice) {
